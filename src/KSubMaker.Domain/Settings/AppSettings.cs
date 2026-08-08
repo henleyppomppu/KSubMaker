@@ -39,6 +39,7 @@ public sealed class AppSettings
     public string TranslationModel { get; set; } = "auto";
     public string LlmModel { get; set; } = "auto";
     public TranslationStyle TranslationStyle { get; set; } = TranslationStyle.Natural;
+    public bool SkipTranslationForSameLanguage { get; set; } = true;
 
     public int TranslationBatchMaxItems { get; set; } = 30;
     public int TranslationBatchMaxChars { get; set; } = 2500;

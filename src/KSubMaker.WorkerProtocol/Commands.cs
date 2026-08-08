@@ -104,6 +104,9 @@ public sealed record WorkerJobSettings
     [JsonPropertyName("translationStyle")]
     public string TranslationStyle { get; init; } = "natural";
 
+    [JsonPropertyName("skipTranslationForSameLanguage")]
+    public bool SkipTranslationForSameLanguage { get; init; } = true;
+
     [JsonPropertyName("batchMaxItems")]
     public int BatchMaxItems { get; init; } = 30;
 

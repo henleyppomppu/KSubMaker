@@ -1025,6 +1025,18 @@ class CommandHandlers:
         emit.progress(Stages.TRANSLATING, 0.0)
 
         translations: dict[int, str] = {int(k): v for k, v in already.items() if str(v).strip()}
+        
+        source_language = str(transcription.get("sourceLanguage") or "en")
+        skip_same_lang = bool(settings.get("skipTranslationForSameLanguage", True))
+        # 원본 음성 언어가 한국어(ko)이고 동일 언어 번역 생략 옵션이 활성화된 경우 번역 패스
+        if skip_same_lang and source_language == "ko":
+            _log.info("원본 언어가 한국어(ko)이고 동일 언어 번역 생략 옵션이 활성화되어 있어 번역 단계를 생략합니다.")
+            for segment in segments:
+                seg_id = int(segment.get("id", 0) or 0)
+                translations[seg_id] = (segment.get("text") or "").strip()
+            emit.progress(Stages.TRANSLATING, 100.0)
+            return translations
+
         pending_ids = set(missing_ids(segments, translations))
 
         if not pending_ids:

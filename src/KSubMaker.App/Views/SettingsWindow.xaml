@@ -188,6 +188,10 @@
                                            Margin="0,4,0,0"
                                            Foreground="#6B6B6B" />
 
+                                <CheckBox Content="동일 언어 번역 생략 (예: 한국어 음성은 번역하지 않고 그대로 사용)"
+                                          IsChecked="{Binding SkipTranslationForSameLanguage}"
+                                          Margin="0,8,0,4" />
+
                                 <StackPanel Style="{StaticResource FieldRow}">
                                     <TextBlock Text="{x:Static res:Strings.TranslationStyleLabel}"
                                                Style="{StaticResource FieldLabel}" />

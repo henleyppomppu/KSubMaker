@@ -78,6 +78,7 @@ public sealed class SettingsRepository(
         settings.TranslationModel = GetString(rows, nameof(settings.TranslationModel), settings.TranslationModel);
         settings.LlmModel = GetString(rows, nameof(settings.LlmModel), settings.LlmModel);
         settings.TranslationStyle = GetEnum(rows, nameof(settings.TranslationStyle), settings.TranslationStyle);
+        settings.SkipTranslationForSameLanguage = GetBool(rows, nameof(settings.SkipTranslationForSameLanguage), settings.SkipTranslationForSameLanguage);
         settings.TranslationBatchMaxItems = GetInt(rows, nameof(settings.TranslationBatchMaxItems), settings.TranslationBatchMaxItems);
         settings.TranslationBatchMaxChars = GetInt(rows, nameof(settings.TranslationBatchMaxChars), settings.TranslationBatchMaxChars);
         settings.TranslationBatchMaxSeconds = GetInt(rows, nameof(settings.TranslationBatchMaxSeconds), settings.TranslationBatchMaxSeconds);
@@ -179,6 +180,7 @@ public sealed class SettingsRepository(
             [nameof(s.TranslationModel)] = s.TranslationModel,
             [nameof(s.LlmModel)] = s.LlmModel,
             [nameof(s.TranslationStyle)] = s.TranslationStyle.ToString(),
+            [nameof(s.SkipTranslationForSameLanguage)] = Write(s.SkipTranslationForSameLanguage),
             [nameof(s.TranslationBatchMaxItems)] = Write(s.TranslationBatchMaxItems),
             [nameof(s.TranslationBatchMaxChars)] = Write(s.TranslationBatchMaxChars),
             [nameof(s.TranslationBatchMaxSeconds)] = Write(s.TranslationBatchMaxSeconds),
