@@ -49,6 +49,39 @@ KSubMaker는 모델을 **번들하지 않습니다.** 프로그램은 작고, �
 구성 파일: `config.json`, `model.bin`, `shared_vocabulary.json`, `sentencepiece.bpe.model`,
 `tokenizer.json`, `special_tokens_map.json`, `tokenizer_config.json`
 
+#### 일본어 전용 — Kotoba-Whisper v2.0
+
+| 모델 id | 표시 이름 | Hugging Face 저장소 | 예상 크기 | VRAM(대략) | 라이선스 |
+| --- | --- | --- | --- | --- | --- |
+| `kotoba-whisper-v2.0` | Kotoba-Whisper v2.0 — 일본어 전용 (CTranslate2) | `kotoba-tech/kotoba-whisper-v2.0-faster` | 1,446 MiB | 1.8–3.0 GB | MIT |
+
+OpenAI Whisper를 일본어 음성으로 추가 학습한 파인튜닝입니다. `large-v3`의 **절반 크기**라 더
+빠르고 VRAM도 적게 씁니다. 파일 구성이 large-v3 세대와 같아(`model.bin`, `vocabulary.json`,
+`preprocessor_config.json` …) 별도 처리 없이 그대로 로드됩니다.
+
+> **자동 권장에서는 절대 선택되지 않습니다.** 하드웨어 권장은 음성 인식을 시작하기 **전에**
+> 정해지므로 원본 언어를 알 수 없습니다. 일본어 전용 모델을 자동으로 물리면 다른 언어 영상에서
+> 오히려 정확도가 떨어집니다. 폴더가 일본어 영상이라는 것을 아는 사용자가 직접 고르는 선택지입니다.
+> (`HardwareRecommendationPolicyTests`가 이것을 고정합니다.)
+
+> 🛑 **단어 단위 타임스탬프를 지원하지 않습니다. 자동으로 꺼집니다.**
+>
+> 이 변환본의 `config.json`은 `alignment_heads`에 **large-v3의 값을 그대로** 담고 있습니다 —
+> 디코더 레이어 7·10·12·13·16·17·19·21·24·25를 가리킵니다. 그런데 distil 구조라 이 모델의
+> 디코더는 **2층뿐**입니다. 단어 타임스탬프를 켜면 faster-whisper가 없는 레이어의
+> cross-attention을 요구하고, CTranslate2가 배열 밖을 읽어 **워커 프로세스가
+> ACCESS_VIOLATION(0xC0000005)으로 즉사**합니다. 네이티브 크래시라 파이썬 예외 처리로 잡히지
+> 않습니다.
+>
+> 실기에서 실제로 발생했습니다(종료 코드 -1073741819, 인식 시작 22초 후). 그래서
+> `ModelDescriptor.SupportsWordTimestamps = false`로 표시하고 `WorkerJobProcessor`가 실행 시
+> 강제로 끕니다. 설정에서 켜 두어도 이 모델을 쓰는 동안에는 무시됩니다.
+>
+> 대가는 자막 줄 나누기입니다 — `split_segments`가 단어 타임스탬프 대신 문자 비율로 근사하므로
+> 긴 세그먼트를 자르는 위치가 조금 거칠어집니다. 크래시보다는 낫습니다.
+
+> ⚠️ **인식 품질은 아직 측정하지 않았습니다.** 일본어 특화라는 설계상의 근거만 있습니다.
+
 > ⚠️ **NLLB-200은 기본 번역 모델이며 CC-BY-NC-4.0 — 비상업적 사용만 허용됩니다.**
 > 상업적 용도로 자막을 만들려면 번역 엔진을 로컬 LLM으로 바꾸거나 다른 모델을 써야 합니다.
 > 다만 로컬 LLM 쪽도 라이선스를 확인하세요 — Qwen2.5는 Apache-2.0이지만 아래 경고대로 품질

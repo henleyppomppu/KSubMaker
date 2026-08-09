@@ -426,6 +426,12 @@ public sealed class ToolLocator : IToolLocator, IWorkerLaunchDescriptor
                 continue;
             }
 
+            if (OperatingSystem.IsWindows() && candidate.Contains(@"\Microsoft\WindowsApps\", StringComparison.OrdinalIgnoreCase))
+            {
+                // Windows Store 앱 실행 별칭(0바이트 마이크로소프트 스토어 연결 더미 python.exe/python3.exe)은 실제 파이썬이 아니므로 스킵
+                continue;
+            }
+
             if (FileExists(candidate))
             {
                 return Path.GetFullPath(candidate);

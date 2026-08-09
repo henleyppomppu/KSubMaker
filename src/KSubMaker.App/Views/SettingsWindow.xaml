@@ -404,6 +404,15 @@
                                           Margin="0,8,0,4" />
                                 <CheckBox Content="{x:Static res:Strings.FakeAiModeLabel}"
                                           IsChecked="{Binding FakeAiMode}" />
+
+                                <StackPanel Style="{StaticResource FieldRow}" Margin="0,10,0,0">
+                                    <TextBlock Text="테스트용 앞부분만 처리 (초)"
+                                               Style="{StaticResource FieldLabel}" />
+                                    <TextBox Style="{StaticResource NumberBox}"
+                                             Text="{Binding TestDurationSeconds, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                                <TextBlock Text="0을 입력하면 영상 전체를 처리합니다."
+                                           Style="{StaticResource HintText}" />
                             </StackPanel>
                         </GroupBox>
 

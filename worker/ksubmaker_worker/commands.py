@@ -64,9 +64,11 @@ _CHECKPOINT_EVERY_BATCHES = 3
 
 def audio_fingerprint(command: Mapping[str, Any]) -> dict[str, Any]:
     """What ``audio.wav`` depends on, beyond the source file itself."""
+    settings = command.get("settings") or {}
     return {
         "sourceMode": str(command.get("sourceMode") or SourceModes.AUDIO),
         "audioTrackIndex": _optional_int(command.get("audioTrackIndex")),
+        "testDurationSeconds": int(settings.get("testDurationSeconds", 0) or 0),
     }
 
 
@@ -538,11 +540,13 @@ class CommandHandlers:
 
             # No progress events: this file is not the row the user is watching, and reporting
             # against a job the queue has not started would move the wrong progress bar.
+            test_dur = (command.get("settings") or {}).get("testDurationSeconds", 0)
+            dur = float(test_dur) if test_dur and int(test_dur) > 0 else float(probed.get("durationSeconds") or 0.0)
             self.ffmpeg.extract_audio(
                 video_path,
                 str(audio_path),
                 audio_track_index=command.get("audioTrackIndex"),
-                duration_seconds=float(probed.get("durationSeconds") or 0.0),
+                duration_seconds=dur,
                 token=token,
             )
 
@@ -845,7 +849,8 @@ class CommandHandlers:
         fingerprints: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, Any]:
         video_path = str(command.get("videoPath"))
-        duration = float(probed.get("durationSeconds") or 0.0)
+        test_dur = (command.get("settings") or {}).get("testDurationSeconds", 0)
+        duration = float(test_dur) if test_dur and int(test_dur) > 0 else float(probed.get("durationSeconds") or 0.0)
 
         if not probed.get("audioTracks"):
             raise WorkerError(

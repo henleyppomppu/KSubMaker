@@ -256,7 +256,7 @@
             <DataGrid.Columns>
 
                 <!-- 선택 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnSelected}" Width="52">
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnSelected}" SortMemberPath="IsSelected" Width="52">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -267,7 +267,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- 파일명 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnFileName}" Width="260">
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnFileName}" SortMemberPath="FileName" Width="260">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding FileName}"
@@ -291,7 +291,7 @@
                 </DataGridTextColumn>
 
                 <!-- 상태 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnStatus}" Width="92">
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnStatus}" SortMemberPath="Status" Width="92">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Status, Converter={StaticResource JobStatusToText}}"
@@ -308,7 +308,7 @@
                                     Width="112" />
 
                 <!-- 진행률 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnProgress}" Width="150">
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnProgress}" SortMemberPath="OverallProgress" Width="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Grid VerticalAlignment="Center">
@@ -326,7 +326,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- 단계 진행률 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnStageProgress}" Width="126">
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnStageProgress}" SortMemberPath="StageProgress" Width="126">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Grid VerticalAlignment="Center">

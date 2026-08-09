@@ -1,6 +1,7 @@
 using FluentAssertions;
 using KSubMaker.Application.Abstractions;
 using KSubMaker.Domain.Jobs;
+using KSubMaker.Domain.Models;
 using KSubMaker.Domain.Settings;
 using KSubMaker.Infrastructure.Paths;
 using KSubMaker.IntegrationTests.Infrastructure;
@@ -125,6 +126,57 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
         FileName = name,
         DurationSeconds = 60d
     };
+
+    // -----------------------------------------------------------------------
+    // wordTimestamps — the flag that keeps a broken conversion from killing the worker
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Word_timestamps_are_forced_off_for_a_model_that_cannot_survive_them()
+    {
+        // From a real run: selecting kotoba-whisper-v2.0 with word timestamps on ended the worker
+        // with exit code -1073741819 (ACCESS_VIOLATION) seconds into transcription. Its
+        // alignment_heads name decoder layers 7..25 while the distilled decoder has two, so
+        // CTranslate2 reads past the end of the array — in native code, where no handler exists.
+        var settings = new AppSettings
+        {
+            WhisperModel = ModelIds.WhisperKotobaV2,
+            WordTimestamps = true
+        };
+
+        var (command, _) = await RunAsync(NewJob(), settings);
+
+        command.Settings.WordTimestamps.Should().BeFalse(
+            "asking this conversion for word timings crashes the worker process outright");
+    }
+
+    [Fact]
+    public async Task Word_timestamps_are_left_alone_for_every_other_model()
+    {
+        var settings = new AppSettings
+        {
+            WhisperModel = ModelIds.WhisperLargeV3,
+            WordTimestamps = true
+        };
+
+        var (command, _) = await RunAsync(NewJob(), settings);
+
+        command.Settings.WordTimestamps.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Turning_word_timestamps_off_stays_off_regardless_of_the_model()
+    {
+        var settings = new AppSettings
+        {
+            WhisperModel = ModelIds.WhisperLargeV3,
+            WordTimestamps = false
+        };
+
+        var (command, _) = await RunAsync(NewJob(), settings);
+
+        command.Settings.WordTimestamps.Should().BeFalse();
+    }
 
     // -----------------------------------------------------------------------
     // outputConflictPolicy

@@ -107,6 +107,9 @@ public sealed record WorkerJobSettings
     [JsonPropertyName("skipTranslationForSameLanguage")]
     public bool SkipTranslationForSameLanguage { get; init; } = true;
 
+    [JsonPropertyName("testDurationSeconds")]
+    public int TestDurationSeconds { get; init; } = 0;
+
     [JsonPropertyName("batchMaxItems")]
     public int BatchMaxItems { get; init; } = 30;
 

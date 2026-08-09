@@ -4,6 +4,7 @@ using KSubMaker.Application.Services;
 using KSubMaker.Domain.Errors;
 using KSubMaker.Domain.Hardware;
 using KSubMaker.Domain.Jobs;
+using KSubMaker.Domain.Models;
 using KSubMaker.Domain.Settings;
 using KSubMaker.Domain.Subtitles;
 using KSubMaker.Worker.Process;
@@ -28,6 +29,7 @@ public sealed class WorkerJobProcessor : IJobProcessor
     private readonly IAppPaths _paths;
     private readonly WorkerOptions _options;
     private readonly HardwareService? _hardware;
+    private readonly ModelCatalog _catalog;
     private readonly ILogger<WorkerJobProcessor> _logger;
 
     /// <summary>Makes concurrent first-callers start the worker exactly once.</summary>
@@ -47,7 +49,8 @@ public sealed class WorkerJobProcessor : IJobProcessor
         IAppPaths paths,
         IOptions<WorkerOptions> options,
         ILogger<WorkerJobProcessor> logger,
-        HardwareService? hardware = null)
+        HardwareService? hardware = null,
+        ModelCatalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -60,6 +63,10 @@ public sealed class WorkerJobProcessor : IJobProcessor
         // hardware profile a chance to pick up the worker's authoritative CUDA answer at the one
         // moment it is free — right after the worker has come up for a job.
         _hardware = hardware;
+
+        // Immutable data, so falling back to the built-in set is always correct — unlike the
+        // hardware service there is no "unwired" state to worry about.
+        _catalog = catalog ?? new ModelCatalog();
     }
 
     public string Name => "Python AI Worker";
@@ -604,8 +611,21 @@ public sealed class WorkerJobProcessor : IJobProcessor
     /// a cached artefact still matches the current settings: a prefetch that sent a differently
     /// built block would have its wav discarded by the very job it was meant to speed up.
     /// </summary>
-    private static WorkerJobSettings BuildWorkerSettings(AppSettings settings)
+    private WorkerJobSettings BuildWorkerSettings(AppSettings settings)
     {
+        // Some conversions cannot answer this without taking the worker down with them — see
+        // ModelDescriptor.SupportsWordTimestamps. Enforced here rather than in the settings screen
+        // because this is the one place every run passes through, including a retry that reuses a
+        // settings snapshot saved before the model was switched.
+        var wordTimestamps = settings.WordTimestamps;
+        if (wordTimestamps && !_catalog.SupportsWordTimestamps(settings.WhisperModel))
+        {
+            _logger.LogInformation(
+                "{Model}은(는) 단어 단위 타임스탬프를 지원하지 않아 이 실행에서는 끕니다.",
+                settings.WhisperModel);
+            wordTimestamps = false;
+        }
+
         return new WorkerJobSettings
         {
             Language = Fallback(settings.SourceLanguage, "auto"),
@@ -620,7 +640,7 @@ public sealed class WorkerJobProcessor : IJobProcessor
             Device = "auto",
             BeamSize = settings.BeamSize,
             VadFilter = settings.VadFilter,
-            WordTimestamps = settings.WordTimestamps,
+            WordTimestamps = wordTimestamps,
             ConditionOnPreviousText = settings.ConditionOnPreviousText,
 
             TranslationEngine = MapEngine(settings.TranslationEngine),
@@ -628,6 +648,7 @@ public sealed class WorkerJobProcessor : IJobProcessor
             LlmModel = Fallback(settings.LlmModel, "auto"),
             TranslationStyle = MapStyle(settings.TranslationStyle),
             SkipTranslationForSameLanguage = settings.SkipTranslationForSameLanguage,
+            TestDurationSeconds = settings.TestDurationSeconds,
 
             BatchMaxItems = settings.TranslationBatchMaxItems,
             BatchMaxChars = settings.TranslationBatchMaxChars,

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using KSubMaker.Domain.Models;
+using KSubMaker.Domain.Settings;
 using KSubMaker.UnitTests.Fakes;
 using Xunit;
 
@@ -105,6 +106,30 @@ public sealed class ModelCatalogFixtureTests
 
         ModelFileSelector.EntryPointFile(descriptor, selected).Should().Be(selected[0]);
         selected.Should().OnlyContain(file => file.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Only_the_conversion_that_crashes_declines_word_timestamps()
+    {
+        // The flag exists for one measured failure, not as a general distillation caveat:
+        // kotoba-whisper-v2.0 ships large-v3's alignment_heads (decoder layers up to 25) on a
+        // two-layer decoder, so asking it for word timings takes the worker down with an
+        // ACCESS_VIOLATION. Anything else claiming the same exemption is almost certainly a typo.
+        var declining = ModelCatalog.BuiltIn()
+            .Where(descriptor => !descriptor.SupportsWordTimestamps)
+            .Select(descriptor => descriptor.Id);
+
+        declining.Should().Equal(ModelIds.WhisperKotobaV2);
+    }
+
+    [Fact]
+    public void Every_model_that_is_not_whisper_leaves_the_flag_alone()
+    {
+        // Word timestamps are an ASR concept. A translation model or an LLM setting the flag would
+        // be meaningless and would read as though it meant something.
+        ModelCatalog.BuiltIn()
+            .Where(descriptor => descriptor.Kind != ModelKind.Whisper)
+            .Should().OnlyContain(descriptor => descriptor.SupportsWordTimestamps);
     }
 
     [Fact]

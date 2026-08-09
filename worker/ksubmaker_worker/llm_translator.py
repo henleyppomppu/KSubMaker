@@ -301,8 +301,8 @@ class LlamaServer:
             if executable is None:
                 raise WorkerError(
                     errors.TRANSLATION_MODEL_NOT_FOUND,
-                    "로컬 LLM 실행 파일(llama-server)을 찾을 수 없습니다. "
-                    "모델 화면에서 로컬 LLM 구성 요소를 설치한 뒤 다시 시도하세요.",
+                    "로컬 LLM 실행 파일(llama-server)이 설치되어 있지 않습니다. "
+                    "설정에서 번역 엔진을 '로컬 번역 모델(NLLB)'로 변경하시거나, 모델 화면에서 로컬 LLM 구성 요소를 먼저 내려받으세요.",
                     detail="llama-server not found in tools/llama, app directory or PATH",
                 )
 

@@ -14,6 +14,9 @@ public static class ModelIds
     public const string WhisperLargeV3 = "whisper-large-v3";
     public const string WhisperLargeV3Turbo = "whisper-large-v3-turbo";
 
+    /// <summary>Japanese-only. Never recommended automatically — see the catalog entry.</summary>
+    public const string WhisperKotobaV2 = "kotoba-whisper-v2.0";
+
     public const string TranslationNllb600M = "nllb-200-distilled-600M";
     public const string TranslationNllb13B = "nllb-200-distilled-1.3B";
 
@@ -90,6 +93,20 @@ public sealed record ModelDescriptor
 
     /// <summary>Whisper/NLLB models are consumed as a directory; GGUF LLM models as one entry-point file.</summary>
     public required ModelPayloadLayout Layout { get; init; }
+
+    /// <summary>
+    /// False when asking this model for word-level timestamps would break it.
+    ///
+    /// <para>faster-whisper builds word timings by reading the cross-attention of the decoder layers
+    /// named in the model's <c>alignment_heads</c>. A distilled conversion that kept the teacher's
+    /// list points at layers its own decoder does not have, and CTranslate2 reads past the end of
+    /// the array: the worker dies with an ACCESS_VIOLATION (0xC0000005) that no <c>except</c> can
+    /// catch, because the fault is in native code.</para>
+    ///
+    /// <para>Only meaningful for <see cref="ModelKind.Whisper"/>. Default true — this is a
+    /// property of a specific broken conversion, not of distillation in general.</para>
+    /// </summary>
+    public bool SupportsWordTimestamps { get; init; } = true;
 }
 
 /// <summary>
@@ -115,6 +132,15 @@ public sealed class ModelCatalog
 
     public ModelDescriptor Get(string id) =>
         Find(id) ?? throw new KeyNotFoundException($"알 수 없는 모델 식별자입니다: {id}");
+
+    /// <summary>
+    /// Whether word-level timestamps are safe to request for <paramref name="modelId"/>.
+    ///
+    /// <para>An unknown id — including <c>"auto"</c> before it is resolved — answers true: the
+    /// catalog cannot veto a model it has never heard of, and the built-in ones are all fine.</para>
+    /// </summary>
+    public bool SupportsWordTimestamps(string? modelId) =>
+        Find(modelId)?.SupportsWordTimestamps ?? true;
 
     public double EstimatedVramGb(string modelId, ComputeType computeType)
     {
@@ -280,6 +306,45 @@ public sealed class ModelCatalog
             },
             License = "MIT (모델 가중치: OpenAI Whisper, MIT)",
             Description = "large-v3에 가까운 정확도에 약 4배 빠른 속도. VRAM 8GB 환경의 기본값입니다."
+        };
+
+        // Japanese-only, and deliberately not part of SelectWhisper. The recommendation runs before
+        // anything has been transcribed, so it cannot know the source language; steering a user
+        // there automatically would hand them a model that is *worse* on every other language.
+        // It is an explicit choice for someone who knows their folder is Japanese.
+        //
+        // The file set is the same five names as the large-v3 generation, so it needs no new
+        // layout handling — the whole entry is data.
+        yield return new ModelDescriptor
+        {
+            Id = ModelIds.WhisperKotobaV2,
+            Kind = ModelKind.Whisper,
+            DisplayName = "Kotoba-Whisper v2.0 — 일본어 전용 (CTranslate2)",
+            RepositoryId = "kotoba-tech/kotoba-whisper-v2.0-faster",
+            IncludePattern = ModelFileSelector.AnyFile,
+            EssentialFilePattern = ModelFileSelector.Ct2EssentialFile,
+            Layout = ModelPayloadLayout.Directory,
+            FallbackFiles = WhisperV3Files(),
+            ApproxSizeBytes = 1_516_480_096L, // 1,446 MiB
+            VramGbByComputeType = new Dictionary<ComputeType, double>
+            {
+                [ComputeType.Float16] = 3.0,
+                [ComputeType.Int8Float16] = 1.9,
+                [ComputeType.Int8] = 1.8
+            },
+            // Measured, not precautionary: selecting this model with word timestamps on killed the
+            // worker with 0xC0000005 mid-transcription. Its config.json carries large-v3's
+            // alignment_heads verbatim — layers 7,10,12,13,16,17,19,21,24,25 — while the distilled
+            // decoder has **two** layers. CTranslate2 indexes past the end and the process dies in
+            // native code, so nothing in the worker can catch it. The only safe move is to never
+            // ask this model for word timings.
+            SupportsWordTimestamps = false,
+            License = "MIT (모델 가중치: Kotoba Technologies, MIT)",
+            Description =
+                "일본어 음성에 특화된 Whisper 파인튜닝. large-v3의 절반 크기로 더 빠릅니다. " +
+                "일본어 영상에만 쓰세요 — 다른 언어에서는 정확도가 떨어집니다. " +
+                "이 모델은 단어 단위 타임스탬프를 지원하지 않아 자동으로 꺼집니다(자막 줄 나누기가 " +
+                "조금 거칠어집니다)."
         };
 
         yield return new ModelDescriptor

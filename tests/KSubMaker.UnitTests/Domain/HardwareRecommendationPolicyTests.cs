@@ -93,6 +93,38 @@ public sealed class HardwareRecommendationPolicyTests
 
     [Theory]
     [InlineData(2d)]
+    [InlineData(4d)]
+    [InlineData(6d)]
+    [InlineData(8d)]
+    [InlineData(12d)]
+    [InlineData(16d)]
+    [InlineData(24d)]
+    public void The_japanese_only_model_is_never_recommended(double vramGb)
+    {
+        // The recommendation runs before anything has been transcribed, so it cannot know the
+        // source language. Steering someone there automatically would hand them a model that is
+        // worse on every language but one. It stays an explicit choice.
+        HardwareRecommendationPolicy.Recommend(Gpu(vramGb), Catalog)
+            .WhisperModelId.Should().NotBe(ModelIds.WhisperKotobaV2);
+    }
+
+    [Fact]
+    public void The_japanese_only_model_is_not_the_cpu_fallback_either()
+    {
+        var profile = new HardwareProfile
+        {
+            Gpus = [],
+            CudaAvailable = false,
+            LogicalCoreCount = 8,
+            TotalRamBytes = 8L * 1024 * 1024 * 1024
+        };
+
+        HardwareRecommendationPolicy.Recommend(profile, Catalog)
+            .WhisperModelId.Should().NotBe(ModelIds.WhisperKotobaV2);
+    }
+
+    [Theory]
+    [InlineData(2d)]
     [InlineData(12d)]
     [InlineData(24d)]
     public void Qwen_is_never_recommended_for_the_llm_engine(double vramGb)

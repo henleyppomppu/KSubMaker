@@ -270,6 +270,8 @@ class FfmpegService:
         ]
         if audio_track_index is not None:
             argv += ["-map", f"0:a:{int(audio_track_index)}"]
+        if duration_seconds is not None and duration_seconds > 0:
+            argv += ["-t", f"{duration_seconds:.3f}"]
         argv += [
             "-ac",
             str(TARGET_CHANNELS),

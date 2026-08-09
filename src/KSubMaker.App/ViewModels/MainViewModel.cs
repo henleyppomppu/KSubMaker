@@ -583,6 +583,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _settings = _settingsService.Current;
 
+        if (_settings.TestDurationSeconds > 0)
+        {
+            System.Windows.MessageBox.Show(
+                $"테스트 모드가 활성화되어 있습니다.\n\n영상의 앞부분({_settings.TestDurationSeconds}초)만 자막 작업이 진행되고 완료 처리됩니다.\n영상 전체를 처리하시려면 [설정] ➔ [실행] 탭에서 '테스트용 앞부분만 처리' 값을 0으로 변경해 주세요.",
+                "테스트 실행 안내",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+
         if (await EnsureModelsAsync().ConfigureAwait(true) is not { } runSettings)
         {
             return;
