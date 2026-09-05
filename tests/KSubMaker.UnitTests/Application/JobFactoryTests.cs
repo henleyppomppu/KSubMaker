@@ -213,6 +213,7 @@ public sealed class JobFactoryTests
     [InlineData(JobStatus.Pending)]
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     [InlineData(JobStatus.Paused)]
     public void RetryFailedOnly_skips_every_job_that_did_not_fail(JobStatus status)
     {
@@ -338,6 +339,19 @@ public sealed class JobFactoryTests
 
         result.Decision.Should().Be(EnqueueDecision.Requeued);
         result.Job!.Status.Should().Be(JobStatus.Pending);
+    }
+
+    /// <summary>
+    /// 건너뜀 is a deliberate choice, not an interrupted run — unlike Failed/Cancelled, a plain rescan
+    /// must not silently undo it. Retrying a skipped job stays an explicit [다시 넣기].
+    /// </summary>
+    [Fact]
+    public void A_skipped_job_is_left_alone_by_a_plain_rescan()
+    {
+        var result = JobFactory.Create(File(), ExistingJob(JobStatus.Skipped), Settings(), NothingExists, Clock);
+
+        result.Decision.Should().Be(EnqueueDecision.Unchanged);
+        result.Job!.Status.Should().Be(JobStatus.Skipped);
     }
 
     [Theory]

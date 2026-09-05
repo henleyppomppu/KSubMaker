@@ -92,7 +92,7 @@ public static class JobSelectionResolver
         JobAction.Cancel => !JobStateMachine.IsTerminal(status),
 
         // Mirrors JobQueueService.RetryAsync.
-        JobAction.Retry => status is JobStatus.Failed or JobStatus.Cancelled
+        JobAction.Retry => status is JobStatus.Failed or JobStatus.Cancelled or JobStatus.Skipped
             or JobStatus.Completed or JobStatus.Paused,
 
         // Anything can be removed: JobQueueService.RemoveAsync cancels a running job and waits for

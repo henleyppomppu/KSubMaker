@@ -508,7 +508,8 @@ public sealed class JobQueueService : IAsyncDisposable
                 continue;
             }
 
-            if (job.Status is not (JobStatus.Failed or JobStatus.Cancelled or JobStatus.Completed or JobStatus.Paused))
+            if (job.Status is not (JobStatus.Failed or JobStatus.Cancelled or JobStatus.Skipped
+                or JobStatus.Completed or JobStatus.Paused))
             {
                 continue;
             }
@@ -549,7 +550,11 @@ public sealed class JobQueueService : IAsyncDisposable
                 active.RequestCancel();
             }
 
-            job.TransitionTo(JobStatus.Cancelled, _timeProvider);
+            // A job still Pending never ran, so 건너뛰기 here really is a skip — nothing is being
+            // abandoned mid-work. Anything else (an active stage, or Paused with progress already
+            // made) is an interruption, which 취소 describes more honestly than "skipped".
+            var outcome = job.Status == JobStatus.Pending ? JobStatus.Skipped : JobStatus.Cancelled;
+            job.TransitionTo(outcome, _timeProvider);
             changed.Add(job);
         }
 

@@ -83,6 +83,25 @@ public sealed class JobTransitionTests
         job.ProcessingSpeed.Should().Be(0d);
     }
 
+    /// <summary>
+    /// 건너뜀 only ever happens to a job that never left Pending, so unlike the
+    /// cancel-or-pause-while-running case above, there is no stage or progress to preserve.
+    /// </summary>
+    [Fact]
+    public void Skipping_a_pending_job_leaves_it_at_zero_progress()
+    {
+        var clock = new FixedTimeProvider(Now);
+        var job = NewJob(JobStatus.Pending);
+
+        job.TransitionTo(JobStatus.Skipped, clock);
+
+        job.Status.Should().Be(JobStatus.Skipped);
+        job.CurrentStage.Should().Be(JobStage.None);
+        job.OverallProgress.Should().Be(0d);
+        job.EstimatedTimeRemaining.Should().BeNull();
+        job.ProcessingSpeed.Should().Be(0d);
+    }
+
     [Fact]
     public void Entering_an_active_status_clears_a_previous_error()
     {
@@ -132,6 +151,7 @@ public sealed class JobTransitionTests
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Failed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     [InlineData(JobStatus.Paused)]
     public void MarkFailed_always_succeeds_whatever_the_current_status(JobStatus from)
     {

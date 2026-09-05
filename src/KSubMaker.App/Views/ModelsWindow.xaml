@@ -12,6 +12,20 @@
         FontFamily="Malgun Gothic"
         FontSize="12">
 
+    <Window.Resources>
+        <!-- 음성 인식 has exactly one way to do the job (Whisper), so it never needs sub-grouping.
+             번역 has two competing ways (NLLB vs 로컬 LLM), grouped by Kind below. Splitting into tabs
+             — rather than one list grouped by both step and kind — is what stops 번역 from appearing
+             as its own group name twice (once for the step, once for NLLB's kind). -->
+        <CollectionViewSource x:Key="RecognitionModels" Source="{Binding Models}" />
+
+        <CollectionViewSource x:Key="TranslationModels" Source="{Binding Models}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Kind" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </Window.Resources>
+
     <DockPanel LastChildFill="True">
 
         <!-- ======================= command bar ======================= -->
@@ -86,117 +100,271 @@
             </StackPanel>
         </Border>
 
-        <!-- ======================= model grid ======================= -->
-        <DataGrid ItemsSource="{Binding Models}"
-                  SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
-                  AutoGenerateColumns="False"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  CanUserResizeRows="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  SelectionUnit="FullRow"
-                  HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal"
-                  RowHeaderWidth="0"
-                  RowHeight="28"
-                  EnableRowVirtualization="True"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                  Margin="12,8,12,4">
+        <!-- ======================= 음성 인식 / 번역 tabs ======================= -->
+        <Border DockPanel.Dock="Top"
+                Margin="12,8,12,0"
+                Padding="10,8"
+                Background="#EEF3FC"
+                BorderBrush="#CFE0F7"
+                BorderThickness="1"
+                CornerRadius="6">
+            <TextBlock Text="{x:Static res:Strings.ModelPipelineOverviewHint}"
+                       TextWrapping="Wrap"
+                       FontSize="12" />
+        </Border>
 
-            <DataGrid.Columns>
+        <TabControl Margin="12,8,12,4" Padding="0" BorderThickness="0" Background="Transparent">
 
-                <!-- 이름 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnName}" Width="300">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-                                <Border Background="#E3F0E3"
-                                        CornerRadius="3"
-                                        Padding="5,1"
-                                        Margin="6,0,0,0"
-                                        Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{x:Static res:Strings.ModelRecommendedMark}"
-                                               FontSize="10"
-                                               Foreground="#1F7A33" />
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+            <!-- ─────────────────────── 음성 인식 ─────────────────────── -->
+            <TabItem Header="{x:Static res:Strings.ModelKindWhisper}">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{x:Static res:Strings.ModelKindWhisperHint}"
+                               Style="{StaticResource HintText}"
+                               Margin="4,8,0,6" />
 
-                <!-- 종류 -->
-                <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnKind}"
-                                    Binding="{Binding KindText}"
-                                    Width="90" />
+                    <DataGrid ItemsSource="{Binding Source={StaticResource RecognitionModels}}"
+                              SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserResizeRows="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              RowHeaderWidth="0"
+                              RowHeight="28"
+                              EnableRowVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
 
-                <!-- 상태 -->
-                <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnState}"
-                                    Binding="{Binding StateText}"
-                                    Width="100" />
+                        <DataGrid.Columns>
 
-                <!-- 크기 -->
-                <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnSize}"
-                                    Binding="{Binding SizeBytes, Converter={StaticResource BytesToString}}"
-                                    Width="90">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="HorizontalAlignment" Value="Right" />
-                            <Setter Property="VerticalAlignment" Value="Center" />
-                            <Setter Property="Margin" Value="0,0,6,0" />
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+                            <!-- 이름 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnName}" Width="340">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                            <Border Background="#E3F0E3"
+                                                    CornerRadius="3"
+                                                    Padding="5,1"
+                                                    Margin="6,0,0,0"
+                                                    Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{x:Static res:Strings.ModelRecommendedMark}"
+                                                           FontSize="10"
+                                                           Foreground="#1F7A33" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                <!-- 예상 VRAM -->
-                <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnVram}"
-                                    Binding="{Binding VramText}"
-                                    Width="100">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="HorizontalAlignment" Value="Right" />
-                            <Setter Property="VerticalAlignment" Value="Center" />
-                            <Setter Property="Margin" Value="0,0,6,0" />
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+                            <!-- 상태 -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnState}"
+                                                Binding="{Binding StateText}"
+                                                Width="100" />
 
-                <!-- 진행률 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnProgress}" Width="200">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Grid VerticalAlignment="Center" ToolTip="{Binding ProgressDetail}">
-                                <ProgressBar Minimum="0"
-                                             Maximum="100"
-                                             Height="16"
-                                             Value="{Binding DownloadPercent, Mode=OneWay}" />
-                                <TextBlock Text="{Binding DownloadPercent, Converter={StaticResource PercentToText}}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           FontSize="10" />
-                            </Grid>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                            <!-- 크기 -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnSize}"
+                                                Binding="{Binding SizeBytes, Converter={StaticResource BytesToString}}"
+                                                Width="90">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Right" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Setter Property="Margin" Value="0,0,6,0" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
-                <!-- 라이선스 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnLicense}" Width="240">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding License}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{Binding License}" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                            <!-- 예상 VRAM -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnVram}"
+                                                Binding="{Binding VramText}"
+                                                Width="100">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Right" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Setter Property="Margin" Value="0,0,6,0" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
-            </DataGrid.Columns>
-        </DataGrid>
+                            <!-- 진행률 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnProgress}" Width="200">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid VerticalAlignment="Center" ToolTip="{Binding ProgressDetail}">
+                                            <ProgressBar Minimum="0"
+                                                         Maximum="100"
+                                                         Height="16"
+                                                         Value="{Binding DownloadPercent, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding DownloadPercent, Converter={StaticResource PercentToText}}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="10" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 라이선스 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnLicense}" Width="240">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding License}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding License}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ─────────────────────── 번역 (NLLB + 로컬 LLM) ─────────────────────── -->
+            <TabItem Header="{x:Static res:Strings.ModelKindTranslation}">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{x:Static res:Strings.ModelStepTranslationHint}"
+                               Style="{StaticResource HintText}"
+                               Margin="4,8,0,6" />
+
+                    <DataGrid ItemsSource="{Binding Source={StaticResource TranslationModels}}"
+                              SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserResizeRows="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              RowHeaderWidth="0"
+                              RowHeight="28"
+                              EnableRowVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                        <DataGrid.Columns>
+
+                            <!-- 이름 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnName}" Width="340">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                            <Border Background="#E3F0E3"
+                                                    CornerRadius="3"
+                                                    Padding="5,1"
+                                                    Margin="6,0,0,0"
+                                                    Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{x:Static res:Strings.ModelRecommendedMark}"
+                                                           FontSize="10"
+                                                           Foreground="#1F7A33" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 상태 -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnState}"
+                                                Binding="{Binding StateText}"
+                                                Width="100" />
+
+                            <!-- 크기 -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnSize}"
+                                                Binding="{Binding SizeBytes, Converter={StaticResource BytesToString}}"
+                                                Width="90">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Right" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Setter Property="Margin" Value="0,0,6,0" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 예상 VRAM -->
+                            <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnVram}"
+                                                Binding="{Binding VramText}"
+                                                Width="100">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Right" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Setter Property="Margin" Value="0,0,6,0" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 진행률 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnProgress}" Width="200">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid VerticalAlignment="Center" ToolTip="{Binding ProgressDetail}">
+                                            <ProgressBar Minimum="0"
+                                                         Maximum="100"
+                                                         Height="16"
+                                                         Value="{Binding DownloadPercent, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding DownloadPercent, Converter={StaticResource PercentToText}}"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="10" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 라이선스 -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnLicense}" Width="240">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding License}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding License}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                        </DataGrid.Columns>
+
+                        <DataGrid.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="4,10,0,4">
+                                            <TextBlock Text="{Binding Name, Converter={StaticResource ModelKindToName}}"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="13"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name, Converter={StaticResource ModelKindToHint}}"
+                                                       Style="{StaticResource HintText}"
+                                                       Margin="10,0,0,0"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </DataGrid.GroupStyle>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+        </TabControl>
 
     </DockPanel>
 </Window>

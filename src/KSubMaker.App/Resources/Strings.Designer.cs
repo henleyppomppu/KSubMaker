@@ -283,6 +283,15 @@ public static partial class Strings
     /// <summary>{0}개 항목을 휴지통으로 보냈습니다.</summary>
     public static string DeleteDoneFormat => Get(nameof(DeleteDoneFormat));
 
+    /// <summary>결과 자막 이동</summary>
+    public static string RelocateOutputsDialogTitle => Get(nameof(RelocateOutputsDialogTitle));
+
+    /// <summary>출력 폴더 설정이 바뀌었습니다. 이미 만들어진 자막 {0}개를 새 위치로 옮길까요?</summary>
+    public static string RelocateOutputsConfirmFormat => Get(nameof(RelocateOutputsConfirmFormat));
+
+    /// <summary>자막 {0}/{1}개를 새 폴더로 옮겼습니다.</summary>
+    public static string RelocateOutputsDoneFormat => Get(nameof(RelocateOutputsDoneFormat));
+
     /// <summary>경로</summary>
     public static string JobTooltipPathLabel => Get(nameof(JobTooltipPathLabel));
 
@@ -349,8 +358,11 @@ public static partial class Strings
     /// <summary>실패</summary>
     public static string JobStatusFailed => Get(nameof(JobStatusFailed));
 
-    /// <summary>건너뜀</summary>
+    /// <summary>취소됨</summary>
     public static string JobStatusCancelled => Get(nameof(JobStatusCancelled));
+
+    /// <summary>건너뜀</summary>
+    public static string JobStatusSkipped => Get(nameof(JobStatusSkipped));
 
     /// <summary>일시정지</summary>
     public static string JobStatusPaused => Get(nameof(JobStatusPaused));
@@ -412,7 +424,7 @@ public static partial class Strings
     /// <summary>작업이 실행 중일 때는 파일을 검색할 수 없습니다.</summary>
     public static string QueueBusyCannotScan => Get(nameof(QueueBusyCannotScan));
 
-    /// <summary>시작할 수 있는 작업이 없습니다. 완료·실패·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
+    /// <summary>시작할 수 있는 작업이 없습니다. 완료·실패·취소·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
     public static string NoRunnableJobs => Get(nameof(NoRunnableJobs));
 
     /// <summary>작업을 시작했습니다.</summary>
@@ -430,13 +442,13 @@ public static partial class Strings
     /// <summary>먼저 목록에서 항목을 선택하세요.</summary>
     public static string NoSelectionMessage => Get(nameof(NoSelectionMessage));
 
-    /// <summary>선택한 작업은 건너뛸 수 있는 상태가 아닙니다. 이미 완료·실패·건너뛴 작업은 건너뛸 수 없습니다.</summary>
+    /// <summary>선택한 작업은 건너뛸 수 있는 상태가 아닙니다. 이미 완료·실패·취소·건너뛴 작업은 건너뛸 수 없습니다.</summary>
     public static string SelectionNotCancellableMessage => Get(nameof(SelectionNotCancellableMessage));
 
-    /// <summary>선택한 작업은 다시 넣을 수 있는 상태가 아닙니다. 완료·실패·건너뜀·일시정지된 작업만 큐에 다시 넣을 수 있습니다.</summary>
+    /// <summary>선택한 작업은 다시 넣을 수 있는 상태가 아닙니다. 완료·실패·취소·건너뜀·일시정지된 작업만 큐에 다시 넣을 수 있습니다.</summary>
     public static string SelectionNotRetryableMessage => Get(nameof(SelectionNotRetryableMessage));
 
-    /// <summary>선택한 작업은 시작할 수 있는 상태가 아닙니다. 대기·일시정지된 작업만 시작할 수 있고, 완료·실패·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
+    /// <summary>선택한 작업은 시작할 수 있는 상태가 아닙니다. 대기·일시정지된 작업만 시작할 수 있고, 완료·실패·취소·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
     public static string SelectionNotStartableMessage => Get(nameof(SelectionNotStartableMessage));
 
     /// <summary>선택한 작업은 지금 이 동작을 수행할 수 있는 상태가 아닙니다.</summary>
@@ -1086,6 +1098,21 @@ public static partial class Strings
 
     /// <summary>로컬 LLM</summary>
     public static string ModelKindLlm => Get(nameof(ModelKindLlm));
+
+    /// <summary>영상 하나를 두 단계로 처리합니다 — 먼저 음성 인식 모델이 말소리를 원어 자막으로 뽑아내고, 그다음 번역 모델이 그 자막을 한국어로 다시 옮깁니다. 아래 탭에서 각 단계에 쓸 모델을 고릅니다.</summary>
+    public static string ModelPipelineOverviewHint => Get(nameof(ModelPipelineOverviewHint));
+
+    /// <summary>1차적으로 음성에서 자막을 추출하는 모델입니다. 영상 속 말소리를 원어 텍스트로 받아쓰며, 모델이 클수록 정확하지만 느립니다.</summary>
+    public static string ModelKindWhisperHint => Get(nameof(ModelKindWhisperHint));
+
+    /// <summary>전용 번역 모델(NLLB)입니다. 문장 단위로 빠르고 안정적으로 옮기지만, 앞뒤 문맥이나 말투 지시는 반영하지 못합니다.</summary>
+    public static string ModelKindTranslationHint => Get(nameof(ModelKindTranslationHint));
+
+    /// <summary>번역도 시킬 수 있는 범용 대화형 모델(LLM)입니다. 앞뒤 문맥과 말투 지시를 반영할 수 있지만, 토큰을 하나씩 만들어내는 방식이라 NLLB보다 체감상 5~20배 느립니다.</summary>
+    public static string ModelKindLlmHint => Get(nameof(ModelKindLlmHint));
+
+    /// <summary>자막을 추출한 뒤, 그것을 각 언어에 맞게 다시 번역하는 2차 과정에서 쓰는 모델입니다. 아래 NLLB(전용 번역기)와 로컬 LLM(범용 대화형 모델) 중 하나를 골라 씁니다.</summary>
+    public static string ModelStepTranslationHint => Get(nameof(ModelStepTranslationHint));
 
     /// <summary>설치됨</summary>
     public static string ModelStateInstalled => Get(nameof(ModelStateInstalled));

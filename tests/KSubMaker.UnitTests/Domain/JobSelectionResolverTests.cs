@@ -32,6 +32,7 @@ public sealed class JobSelectionResolverTests
     [InlineData(JobStatus.Completed, false)]
     [InlineData(JobStatus.Failed, false)]
     [InlineData(JobStatus.Cancelled, false)]
+    [InlineData(JobStatus.Skipped, false)]
     public void Cancel_accepts_everything_that_has_not_finished(JobStatus status, bool expected)
     {
         JobSelectionResolver.IsEligible(JobAction.Cancel, status).Should().Be(expected);
@@ -40,6 +41,7 @@ public sealed class JobSelectionResolverTests
     [Theory]
     [InlineData(JobStatus.Failed, true)]
     [InlineData(JobStatus.Cancelled, true)]
+    [InlineData(JobStatus.Skipped, true)]
     [InlineData(JobStatus.Completed, true)]
     [InlineData(JobStatus.Paused, true)]
     [InlineData(JobStatus.Pending, false)]
@@ -58,6 +60,7 @@ public sealed class JobSelectionResolverTests
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Failed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     [InlineData(JobStatus.Paused)]
     public void Remove_accepts_every_status(JobStatus status)
     {
@@ -71,6 +74,7 @@ public sealed class JobSelectionResolverTests
     [InlineData(JobStatus.Completed, true)]
     [InlineData(JobStatus.Failed, true)]
     [InlineData(JobStatus.Cancelled, true)]
+    [InlineData(JobStatus.Skipped, true)]
     [InlineData(JobStatus.Probing, false)]
     [InlineData(JobStatus.Transcribing, false)]
     [InlineData(JobStatus.Translating, false)]
@@ -287,6 +291,7 @@ public sealed class JobSelectionResolverTests
     [InlineData(JobStatus.Completed, false)]
     [InlineData(JobStatus.Failed, false)]
     [InlineData(JobStatus.Cancelled, false)]
+    [InlineData(JobStatus.Skipped, false)]
     public void Start_accepts_only_what_is_waiting(JobStatus status, bool expected)
     {
         // 취소 and 완료 are decisions the user already made; 시작 must not quietly undo them.

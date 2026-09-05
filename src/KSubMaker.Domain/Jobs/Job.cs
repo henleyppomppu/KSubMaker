@@ -157,6 +157,7 @@ public sealed class Job
                 break;
 
             case JobStatus.Cancelled:
+            case JobStatus.Skipped:
             case JobStatus.Paused:
                 EstimatedTimeRemaining = null;
                 ProcessingSpeed = 0d;
