@@ -18,6 +18,8 @@
             <conv:PercentToTextConverter x:Key="PercentToText" />
             <conv:EmptyToDashConverter x:Key="EmptyToDash" />
             <conv:ValueEqualsParameterConverter x:Key="ValueEqualsParameter" />
+            <conv:ModelKindToNameConverter x:Key="ModelKindToName" />
+            <conv:ModelKindToHintConverter x:Key="ModelKindToHint" />
 
             <!-- ================= base styles ================= -->
             <Style TargetType="TextBlock" x:Key="LabelText">

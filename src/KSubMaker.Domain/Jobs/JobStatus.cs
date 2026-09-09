@@ -14,7 +14,20 @@ public enum JobStatus
     WritingSubtitle,
     Completed,
     Failed,
+
+    /// <summary>
+    /// Interrupted while it was actually running (or paused with progress already made) — the user
+    /// stopped work that was under way. Distinct from <see cref="Skipped"/>, which never started.
+    /// </summary>
     Cancelled,
+
+    /// <summary>
+    /// Taken out of the queue while it was still <see cref="Pending"/> and had never run — the user
+    /// decided not to bother with it, not that in-progress work was abandoned. Only reachable from
+    /// <see cref="Pending"/>; see <see cref="JobStateMachine"/>.
+    /// </summary>
+    Skipped,
+
     Paused
 }
 

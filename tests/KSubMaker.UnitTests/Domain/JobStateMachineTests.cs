@@ -35,7 +35,7 @@ public sealed class JobStateMachineTests
             [JobStatus.Pending] =
             [
                 JobStatus.Probing, JobStatus.ExtractingAudio, JobStatus.Transcribing, JobStatus.Translating,
-                JobStatus.WritingSubtitle, JobStatus.Cancelled, JobStatus.Failed, JobStatus.Paused
+                JobStatus.WritingSubtitle, JobStatus.Skipped, JobStatus.Failed, JobStatus.Paused
             ],
             [JobStatus.Probing] =
             [
@@ -65,6 +65,7 @@ public sealed class JobStateMachineTests
             [JobStatus.Completed] = [JobStatus.Pending],
             [JobStatus.Failed] = [JobStatus.Pending, JobStatus.Cancelled],
             [JobStatus.Cancelled] = [JobStatus.Pending],
+            [JobStatus.Skipped] = [JobStatus.Pending],
             [JobStatus.Paused] =
             [
                 JobStatus.Pending, JobStatus.Probing, JobStatus.ExtractingAudio, JobStatus.Transcribing,
@@ -135,6 +136,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Failed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     [InlineData(JobStatus.Paused)]
     public void A_transition_to_the_same_status_is_always_a_no_op(JobStatus status)
     {
@@ -145,6 +147,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Completed, true)]
     [InlineData(JobStatus.Failed, true)]
     [InlineData(JobStatus.Cancelled, true)]
+    [InlineData(JobStatus.Skipped, true)]
     [InlineData(JobStatus.Pending, false)]
     [InlineData(JobStatus.Paused, false)]
     [InlineData(JobStatus.Probing, false)]
@@ -152,7 +155,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Transcribing, false)]
     [InlineData(JobStatus.Translating, false)]
     [InlineData(JobStatus.WritingSubtitle, false)]
-    public void IsTerminal_marks_only_completed_failed_and_cancelled(JobStatus status, bool expected)
+    public void IsTerminal_marks_only_completed_failed_cancelled_and_skipped(JobStatus status, bool expected)
     {
         JobStateMachine.IsTerminal(status).Should().Be(expected);
     }
@@ -168,6 +171,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Completed, false)]
     [InlineData(JobStatus.Failed, false)]
     [InlineData(JobStatus.Cancelled, false)]
+    [InlineData(JobStatus.Skipped, false)]
     public void IsActive_marks_only_the_in_flight_statuses(JobStatus status, bool expected)
     {
         JobStateMachine.IsActive(status).Should().Be(expected);
@@ -261,6 +265,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Failed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     public void Every_status_can_be_put_back_in_the_queue(JobStatus from)
     {
         JobStateMachine.CanTransition(from, JobStatus.Pending).Should().BeTrue();
@@ -280,6 +285,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Paused, false)]
     [InlineData(JobStatus.Failed, false)]
     [InlineData(JobStatus.Cancelled, false)]
+    [InlineData(JobStatus.Skipped, false)]
     public void Completed_is_only_reachable_from_writing_the_subtitle(JobStatus from, bool expected)
     {
         JobStateMachine.CanTransition(from, JobStatus.Completed).Should().Be(expected);
@@ -290,6 +296,7 @@ public sealed class JobStateMachineTests
     [InlineData(JobStatus.Completed)]
     [InlineData(JobStatus.Failed)]
     [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
     public void A_terminal_status_never_falls_back_into_an_active_stage(JobStatus terminal)
     {
         foreach (var stage in ActiveOrder)
@@ -319,5 +326,22 @@ public sealed class JobStateMachineTests
         }
 
         reachable.Should().BeEquivalentTo(AllStatuses);
+    }
+
+    /// <summary>
+    /// 건너뜀 means "never ran" — claiming that for a job that was active, or paused with progress
+    /// already made, would misrepresent work that was actually abandoned as work that was never
+    /// attempted. Only a still-<see cref="JobStatus.Pending"/> job may become Skipped.
+    /// </summary>
+    [Fact]
+    public void Only_a_pending_job_can_become_skipped()
+    {
+        JobStateMachine.CanTransition(JobStatus.Pending, JobStatus.Skipped).Should().BeTrue();
+
+        foreach (var status in AllStatuses.Where(s => s is not (JobStatus.Pending or JobStatus.Skipped)))
+        {
+            JobStateMachine.CanTransition(status, JobStatus.Skipped).Should().BeFalse(
+                $"{status} → Skipped would claim work in progress was never started");
+        }
     }
 }

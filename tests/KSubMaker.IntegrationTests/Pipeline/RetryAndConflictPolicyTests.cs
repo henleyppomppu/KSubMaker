@@ -172,8 +172,12 @@ public sealed class RetryAndConflictPolicyTests(MediaFixture media) : IAsyncLife
         job.RetryCount.Should().Be(0, "a pending job is not in a retryable state");
     }
 
+    /// <summary>
+    /// A job that never left Pending has no in-progress work to abandon, so 건너뛰기 on it lands on
+    /// Skipped rather than Cancelled — see <see cref="JobQueueService.CancelAsync"/>.
+    /// </summary>
     [RequiresFfmpegFact]
-    public async Task Cancelling_a_pending_job_moves_it_out_of_the_queue()
+    public async Task Cancelling_a_pending_job_marks_it_skipped()
     {
         await StageAsync();
 
@@ -182,8 +186,8 @@ public sealed class RetryAndConflictPolicyTests(MediaFixture media) : IAsyncLife
         var job = Harness.Queue.Jobs.Single();
         await Harness.Queue.CancelAsync([job.Id]);
 
-        job.Status.Should().Be(JobStatus.Cancelled);
-        (await Harness.JobRepository.FindAsync(job.Id))!.Status.Should().Be(JobStatus.Cancelled);
+        job.Status.Should().Be(JobStatus.Skipped);
+        (await Harness.JobRepository.FindAsync(job.Id))!.Status.Should().Be(JobStatus.Skipped);
     }
 
     // -----------------------------------------------------------------------

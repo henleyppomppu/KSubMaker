@@ -15,6 +15,13 @@ public interface IFileActionService
     string? Rename(string path, string newFileName);
 
     /// <summary>
+    /// Moves <paramref name="sourcePath"/> to <paramref name="destinationPath"/>, creating destination
+    /// directories as needed. Returns true on success; false (and logs) on any failure — a missing
+    /// source, a locked file, or a destination that already exists (this never overwrites).
+    /// </summary>
+    bool Move(string sourcePath, string destinationPath);
+
+    /// <summary>
     /// Sends the given files to the Recycle Bin in one shell operation (so it is a single undo).
     /// Missing files are skipped. Returns true when the operation completed without an error.
     /// </summary>

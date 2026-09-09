@@ -63,14 +63,17 @@ public static class JobStateMachine
         }
 
         // From the queue a job may enter whichever stage its checkpoint resumes at, which is also
-        // what lets pass 2 of the two-pass strategy start a queued job directly at 번역 중.
-        allowed[JobStatus.Pending] = [.. ActiveOrder, JobStatus.Cancelled, JobStatus.Failed, JobStatus.Paused];
+        // what lets pass 2 of the two-pass strategy start a queued job directly at 번역 중. A job
+        // that never left Pending goes to Skipped, not Cancelled, when the user takes it out of the
+        // queue — there is no in-progress work to abandon.
+        allowed[JobStatus.Pending] = [.. ActiveOrder, JobStatus.Skipped, JobStatus.Failed, JobStatus.Paused];
 
         // Terminal-ish states. Completed jobs can be forced back to Pending by an explicit
-        // "reprocess" action; Failed/Cancelled can be retried; Paused resumes.
+        // "reprocess" action; Failed/Cancelled/Skipped can be retried; Paused resumes.
         allowed[JobStatus.Completed] = [JobStatus.Pending];
         allowed[JobStatus.Failed] = [JobStatus.Pending, JobStatus.Cancelled];
         allowed[JobStatus.Cancelled] = [JobStatus.Pending];
+        allowed[JobStatus.Skipped] = [JobStatus.Pending];
         allowed[JobStatus.Paused] = [JobStatus.Pending, .. ActiveOrder, JobStatus.Cancelled];
 
         return allowed;
@@ -78,7 +81,7 @@ public static class JobStateMachine
 
     /// <summary>Statuses from which no further work happens without an explicit user action.</summary>
     public static bool IsTerminal(JobStatus status) =>
-        status is JobStatus.Completed or JobStatus.Failed or JobStatus.Cancelled;
+        status is JobStatus.Completed or JobStatus.Failed or JobStatus.Cancelled or JobStatus.Skipped;
 
     /// <summary>Statuses that mean "a worker is actively touching this job right now".</summary>
     public static bool IsActive(JobStatus status) =>

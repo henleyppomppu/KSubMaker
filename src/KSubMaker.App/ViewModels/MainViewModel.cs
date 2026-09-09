@@ -762,6 +762,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private Task StartAsync() => LaunchQueueAsync(testDurationSeconds: 0);
 
     /// <summary>
+    /// "이 파일만 실행" from the row's right-click menu: runs exactly that job, regardless of what is
+    /// checked. Explicit, so it does not need the highlight-vs-checkbox precedence that 시작 avoids.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStart))]
+    private Task RunThisJobAsync(JobRowViewModel? row)
+    {
+        row ??= PrimaryRow();
+        if (row is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!row.IsRunnable)
+        {
+            _dialogs.ShowWarning(Strings.SelectionNotStartableMessage, Strings.StartButton);
+            return Task.CompletedTask;
+        }
+
+        return LaunchQueueAsync(testDurationSeconds: 0, explicitIds: [row.Id]);
+    }
+
+    /// <summary>
     /// 테스트 실행: process only the first <see cref="TestLengthSeconds"/> seconds of each file, so a
     /// setup can be checked end to end without committing to a long queue. The dropdown passes a new
     /// length as a string; a bare click (no parameter) reuses the remembered one.
@@ -780,19 +802,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         return LaunchQueueAsync(TestLengthSeconds);
     }
 
-    private async Task LaunchQueueAsync(int testDurationSeconds)
+    private async Task LaunchQueueAsync(int testDurationSeconds, IReadOnlyList<string>? explicitIds = null)
     {
-        var anyChecked = CheckedIds().Count > 0;
+        IReadOnlyList<string>? restrict;
 
-        var selection = JobSelectionResolver.ResolveStart(Candidates());
-        if (!Accept(selection, JobAction.Start))
+        if (explicitIds is not null)
         {
-            return;
+            // "이 파일만 실행": the caller already checked eligibility.
+            restrict = explicitIds;
         }
+        else
+        {
+            var anyChecked = CheckedIds().Count > 0;
 
-        // A checked selection is a restriction; null means "the whole pending queue" and is kept
-        // unpinned so a job added between here and the pump still runs.
-        var restrict = anyChecked ? selection.Ids : null;
+            var selection = JobSelectionResolver.ResolveStart(Candidates());
+            if (!Accept(selection, JobAction.Start))
+            {
+                return;
+            }
+
+            // A checked selection is a restriction; null means "the whole pending queue" and is kept
+            // unpinned so a job added between here and the pump still runs.
+            restrict = anyChecked ? selection.Ids : null;
+        }
 
         _settings = _settingsService.Current;
 
@@ -830,37 +862,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             _logger.LogWarning(ex, "테스트 실행 길이를 저장하지 못했습니다.");
         }
-    }
-
-    /// <summary>
-    /// "이 파일만 실행" from the row's right-click menu: runs exactly that job, regardless of what is
-    /// checked. Explicit, so it does not need the highlight-vs-checkbox precedence that 시작 avoids.
-    /// Running a single file is the context menu's job; 시작 is deliberately "run the queue".
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanStart))]
-    private async Task RunThisJobAsync(JobRowViewModel? row)
-    {
-        row ??= PrimaryRow();
-        if (row is null)
-        {
-            return;
-        }
-
-        if (!row.IsRunnable)
-        {
-            _dialogs.ShowWarning(Strings.SelectionNotStartableMessage, Strings.StartButton);
-            return;
-        }
-
-        _settings = _settingsService.Current;
-
-        if (await EnsureModelsAsync().ConfigureAwait(true) is not { } runSettings)
-        {
-            return;
-        }
-
-        await _queue.StartAsync(runSettings, [row.Id]).ConfigureAwait(true);
-        StatusMessage = Strings.StartedMessage;
     }
 
     /// <summary>
@@ -1467,11 +1468,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // otherwise they open the folder the queue is working with. They are only disabled when there is
     // genuinely no folder to open — a first run before any scan.
 
+    private string ConfiguredOutputDirectory => _settings.OutputDirectory?.Trim() ?? string.Empty;
+
     private bool CanOpenSourceFolder =>
         PrimaryRow() is not null || !string.IsNullOrWhiteSpace(TargetFolder);
 
     private bool CanOpenOutputFolder =>
-        PrimaryRow() is not null || !string.IsNullOrWhiteSpace(TargetFolder);
+        PrimaryRow() is not null
+        || !string.IsNullOrWhiteSpace(ConfiguredOutputDirectory)
+        || !string.IsNullOrWhiteSpace(TargetFolder);
 
     [RelayCommand(CanExecute = nameof(CanOpenOutputFolder))]
     private void OpenOutputFolder()
@@ -1488,8 +1493,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // No finished subtitle to point at: open the source folder, where the SRT is written.
-        if (!_shell.OpenFolder(TargetFolder))
+        // No finished subtitle to point at: open where subtitles go — the configured output folder,
+        // or the source folder when they are written next to the video.
+        var folder = !string.IsNullOrWhiteSpace(ConfiguredOutputDirectory) ? ConfiguredOutputDirectory : TargetFolder;
+
+        if (!_shell.OpenFolder(folder))
         {
             StatusMessage = Strings.OutputNotReadyMessage;
         }
@@ -1628,7 +1636,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        var newOutputPath = OutputPathResolver.BuildDefaultPath(newVideoPath, _settings.OutputSuffix);
+        var newOutputPath = OutputPathResolver.BuildDefaultPath(
+            newVideoPath, _settings.OutputSuffix, _settings.OutputDirectory);
 
         await _queue.UpdateSourcePathAsync(row.Id, newVideoPath, newOutputPath).ConfigureAwait(true);
 
@@ -1831,11 +1840,73 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void OnSettingsChanged(object? sender, AppSettings e)
     {
         var snapshot = e;
-        _ = _dispatcher.InvokeAsync(() =>
+        _ = _dispatcher.InvokeAsync(async () =>
         {
+            var previous = _settings;
             _settings = snapshot;
             ApplySettings(snapshot);
+            await OfferOutputRelocationAsync(previous, snapshot).ConfigureAwait(true);
         });
+    }
+
+    /// <summary>
+    /// When the output folder setting itself changes, subtitles the old setting already wrote sit at
+    /// paths the new setting will never look at again — the file is not gone, just orphaned from the
+    /// job that made it. Offers to move what is found rather than doing it silently: this runs on
+    /// every settings save, so a confirmation-free move would fire on saves that touch something
+    /// else entirely.
+    ///
+    /// <para>Deliberately does not change what counts as "already done" (§E in the review this came
+    /// from) — moving the file is what makes the existing completion check see it in the new
+    /// location, without touching that check's logic or re-running anything.</para>
+    /// </summary>
+    private async Task OfferOutputRelocationAsync(AppSettings previous, AppSettings current)
+    {
+        var oldDirectory = previous.OutputDirectory?.Trim() ?? string.Empty;
+        var newDirectory = current.OutputDirectory?.Trim() ?? string.Empty;
+
+        if (string.Equals(oldDirectory, newDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var candidates = Jobs.Select(row => (row.FullPath, row.OutputPath));
+        var plan = OutputRelocationPlanner.Plan(candidates, current.OutputSuffix, current.OutputDirectory, File.Exists);
+
+        if (plan.Count == 0)
+        {
+            return;
+        }
+
+        var confirmed = _dialogs.Confirm(
+            string.Format(CultureInfo.CurrentCulture, Strings.RelocateOutputsConfirmFormat, plan.Count),
+            Strings.RelocateOutputsDialogTitle);
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var moved = 0;
+
+        foreach (var relocation in plan)
+        {
+            if (!_fileActions.Move(relocation.OldPath, relocation.NewPath))
+            {
+                continue;
+            }
+
+            moved++;
+
+            var job = Jobs.FirstOrDefault(row => row.OutputPath == relocation.OldPath);
+            if (job is not null)
+            {
+                await _queue.UpdateSourcePathAsync(job.Id, job.FullPath, relocation.NewPath).ConfigureAwait(true);
+            }
+        }
+
+        StatusMessage = string.Format(
+            CultureInfo.CurrentCulture, Strings.RelocateOutputsDoneFormat, moved, plan.Count);
     }
 
     private void OnHardwareProfileChanged(object? sender, HardwareProfile e)
@@ -1957,6 +2028,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     pending++;
                     break;
                 case JobStatus.Cancelled:
+                case JobStatus.Skipped:
                     break;
                 default:
                     running++;
@@ -1988,6 +2060,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             TestLengthSeconds = settings.TestDurationSeconds;
         }
+
+        // 결과 폴더 열기 can become available the moment an output directory is configured.
+        OpenOutputFolderCommand.NotifyCanExecuteChanged();
     }
 
     private static string FormatGpuSummary(HardwareProfile profile)

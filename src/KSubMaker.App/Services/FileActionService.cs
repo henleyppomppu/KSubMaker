@@ -56,6 +56,49 @@ public sealed class FileActionService(ILogger<FileActionService> logger) : IFile
         }
     }
 
+    public bool Move(string sourcePath, string destinationPath)
+    {
+        if (!TryNormalizeExistingFile(sourcePath, out var full))
+        {
+            return false;
+        }
+
+        string destination;
+
+        try
+        {
+            destination = Path.GetFullPath(destinationPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            _logger.LogWarning(ex, "대상 경로를 해석하지 못했습니다: {Path}", destinationPath);
+            return false;
+        }
+
+        if (File.Exists(destination) || Directory.Exists(destination))
+        {
+            _logger.LogWarning("이동 대상에 항목이 이미 있습니다: {Target}", destination);
+            return false;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.Move(full, destination);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            _logger.LogWarning(ex, "파일을 이동하지 못했습니다: {From} → {To}", full, destination);
+            return false;
+        }
+    }
+
     public bool RecycleFiles(IReadOnlyList<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
