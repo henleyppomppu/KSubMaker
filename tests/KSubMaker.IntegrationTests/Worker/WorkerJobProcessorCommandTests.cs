@@ -1,5 +1,6 @@
 using FluentAssertions;
 using KSubMaker.Application.Abstractions;
+using KSubMaker.Domain.Errors;
 using KSubMaker.Domain.Jobs;
 using KSubMaker.Domain.Models;
 using KSubMaker.Domain.Settings;
@@ -37,6 +38,9 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
     {
         public List<WorkerCommand> Sent { get; } = [];
 
+        /// <summary>Raised before the reply, to stand in for another job's events.</summary>
+        public List<WorkerEvent> Precede { get; } = [];
+
         /// <summary>Reply produced for each <c>process</c> command; the default is a plain success.</summary>
         public Func<ProcessCommand, WorkerEvent> Reply { get; set; } = command => new CompletedEvent
         {
@@ -64,6 +68,13 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
 
             if (command is ProcessCommand process)
             {
+                // Events the worker emits for *other* jobs before this one's answer. The prefetch
+                // lane is the real source of these.
+                foreach (var stray in Precede)
+                {
+                    EventReceived?.Invoke(this, stray);
+                }
+
                 // Raised on a pool thread, like the real client's reader task, so the processor's
                 // completion source is exercised the same way.
                 var reply = Reply(process);
@@ -95,12 +106,18 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
         Job job,
         AppSettings settings,
         JobPhase phase = JobPhase.Full,
-        Func<ProcessCommand, WorkerEvent>? reply = null)
+        Func<ProcessCommand, WorkerEvent>? reply = null,
+        IEnumerable<WorkerEvent>? precede = null)
     {
         var client = new RecordingWorkerClient();
         if (reply is not null)
         {
             client.Reply = reply;
+        }
+
+        if (precede is not null)
+        {
+            client.Precede.AddRange(precede);
         }
 
         var paths = new AppPaths(Path.Combine(_workspace.Root, "appdata"));
@@ -516,5 +533,62 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
 
         command.Settings.Glossary.Should().HaveCount(2);
         command.Settings.Glossary["Sherlock"].Should().Be("셜록");
+    }
+
+
+    // -----------------------------------------------------------------------
+    // 남의 작업 이벤트가 이 작업을 끝내면 안 된다
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Another_jobs_completed_event_does_not_finish_this_one()
+    {
+        // 실기 신고: 인식 못 하는 파일 뒤의 파일이 "아무 작업도 하지 않고 완료" 로 표시됐다.
+        //
+        // 워커 이벤트는 구독자 전원에게 방송되고, 미리 추출 레인은 extractAudio 를 끝낼 때
+        // output_path="" · cue_count=0 인 completed 를 낸다. 그것이 실행 중인 작업을 성공으로
+        // 해소해 버려, 자막이 한 줄도 쓰이지 않았는데 완료가 됐다.
+        var stray = new CompletedEvent
+        {
+            JobId = "another-job",
+            RequestId = "other-request",
+            OutputPath = string.Empty,
+            CueCount = 0,
+            Skipped = true
+        };
+
+        var (_, result) = await RunAsync(NewJob(), new AppSettings(), precede: [stray]);
+
+        result.Success.Should().BeTrue();
+        result.CueCount.Should().Be(12, "이 작업의 진짜 결과라야 한다");
+        result.OutputPath.Should().NotBeNullOrEmpty();
+        result.Skipped.Should().BeFalse("남의 미리 추출 결과를 물려받으면 안 된다");
+    }
+
+    [Fact]
+    public async Task Another_jobs_error_does_not_fail_this_one()
+    {
+        var stray = new ErrorEvent
+        {
+            JobId = "another-job",
+            RequestId = "other-request",
+            Code = ErrorCodes.VideoUnreadable,
+            Message = "남의 작업이 실패했습니다."
+        };
+
+        var (_, result) = await RunAsync(NewJob(), new AppSettings(), precede: [stray]);
+
+        result.Success.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_worker_wide_event_without_a_job_id_still_reaches_the_job()
+    {
+        // jobId 가 없는 것은 워커 전체 이벤트(로그, 하드웨어 보고)다. 걸러내면 안 된다.
+        var broadcast = new LogEvent { Message = "worker 전역 메시지", Level = "info" };
+
+        var (_, result) = await RunAsync(NewJob(), new AppSettings(), precede: [broadcast]);
+
+        result.Success.Should().BeTrue();
     }
 }
