@@ -9,9 +9,9 @@ Claude Code가 이 저장소에서 작업을 이어갈 때 **가장 먼저 읽�
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | 계층 규칙, C#/Python 코딩 규칙, 프로토콜 변경 절차, 커밋 금지 항목 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 구조, 데이터 흐름, 처리 방식 A/B/C, 알려진 제한사항 |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR 30건. **되돌리기 전에 반드시 확인** |
-| [`docs/WORKER_PROTOCOL.md`](docs/WORKER_PROTOCOL.md) | JSON Lines 프로토콜 v1.3 전체 명세 |
-| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | 오류 코드 22개별 증상 → 원인 → 해결 |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR 31건. **되돌리기 전에 반드시 확인** |
+| [`docs/WORKER_PROTOCOL.md`](docs/WORKER_PROTOCOL.md) | JSON Lines 프로토콜 v1.5 전체 명세 |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | 오류 코드 24개별 증상 → 원인 → 해결 |
 
 ---
 
@@ -20,12 +20,12 @@ Claude Code가 이 저장소에서 작업을 이어갈 때 **가장 먼저 읽�
 폴더 안 영상 → faster-whisper 원문 인식 → 한국어 번역 → `*.ko.srt`.
 WPF(.NET 10) UI와 Python AI Worker를 **별도 프로세스**로 분리하고 stdio JSON Lines로 통신합니다.
 
-- C# 169파일 · Python 38파일 · XAML 6파일 · 커밋 10개
-- 프로토콜 **v1.3** · EF Core 마이그레이션 2건
-- 테스트 **C# 1,629(단위 1,489 + 통합 140) / Python 712**, Release 빌드 경고 0
+- C# 191파일 · Python 39파일 · XAML 8파일 · 커밋 64개 (2026-09-26 실측)
+- 버전 **1.1.0** · 프로토콜 **v1.5** · EF Core 마이그레이션 3건
+- 테스트 **C# 1,903(단위 1,718 + 통합 185) / Python 754**, Release 빌드 경고 0
 
 > **테스트 수치 주의.** 위 "전부 통과"는 **Linux/CI 기준**입니다. 실기(Windows)에서 그대로
-> 돌리면 **C# 6건 · Python 9건이 실패하고 통합 테스트 52건이 스킵**됩니다. 전부 POSIX를 가정한
+> 돌리면 **C# 6건 · Python 9건이 실패하고 통합 테스트 52건이 스킵**됩니다(2026-09-26 재확인). 전부 POSIX를 가정한
 > 테스트가 Windows에서 깨지는 것이지 제품 결함이 아닙니다 — C#은 경로 구분자
 > (`"/videos\movie.ko.srt"` vs `"\videos\..."`, `JobFactoryTests`·`FullPipelineTests`·
 > `RetryAndConflictPolicyTests`), Python은 `/usr/bin:/bin`·`/tmp` 하드코딩
@@ -235,7 +235,10 @@ beam 5 / VAD on / `conditionOnPreviousText=false`, 변수 하나만 바꾸고 �
 - `cudnn64_9.dll` 하나만 로드 확인하면 하위 라이브러리도 따라오는지
 - WPF 화면 나머지 — 진행 중 단계별 상태 열 전이, 선택 항목 제거가 캐시까지 지우는지
 - `whisper-large-v3` 다운로드(카탈로그 수정 후 재시도 안 해봄)
-- 처리 방식 B/C, 설치 프로그램(ISCC) 빌드
+- 처리 방식 B/C
+- **설치 프로그램은 이제 컴파일까지만 검증됐습니다** (2026-09-05, ISCC 6.7.3, 197초,
+  1.53 GiB). 실제 설치·업그레이드·제거를 돌려 본 적은 없습니다 — GPU 경고, VC++ 재배포
+  패키지 설치, 제거 시 `%LOCALAPPDATA%\KSubMaker` 유지 여부가 전부 미검증입니다.
 
 ### 5.1 NVIDIA가 아닌 GPU (AMD·Intel Arc)
 
@@ -418,6 +421,27 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
     - `ksubmaker_worker/__init__.py`의 `PROTOCOL_VERSION`은 protocol.py를 베낀 두 번째
       사본이었고 **세 번의 개정 동안 `"1.0"`에 머물러** 있었습니다. 재수출로 바꿨습니다.
 
+14. **설치 프로그램이 한 번도 컴파일된 적이 없었음** — `build-installer.ps1` 이 항상
+    `Invalid section tag` 로 죽었습니다. 원인은 `.iss` 의 한 줄이 `[` 로 시작한 것입니다 —
+    줄바꿈된 Pascal 배열 리터럴 `['vc_redist.x64.exe -> ' + ...]` 인데, **Inno Setup 은 앞에
+    공백이 몇 칸이든 `[` 로 시작하는 줄을 섹션 태그로 읽습니다.** 여기서는 22칸이 들어가
+    있었는데도 잡혔습니다.
+    - 이 저장소의 어떤 자동 테스트도 `.iss` 를 **컴파일해 보지 않습니다.** BOM 검사
+      (`ScriptEncodingTests`)는 인코딩만 봅니다. §4 의 패턴 그대로 — 테스트는 전부 통과하는데
+      실제로 돌리면 깨지는 종류입니다.
+    - 곁들여 알게 된 것: lzma2/max 로 압축한 설치 프로그램은 **1.53 GiB** 로, 포터블
+      zip(**2.00 GiB**)과 달리 GitHub 릴리스 자산 상한 **2 GiB** 안에 들어옵니다. 릴리스를
+      자동화한다면 설치 프로그램은 그대로 올라가고 zip 은 분할이 필요합니다.
+15. **스크립트로 코드를 써 넣을 때 백슬래시가 반복해서 깨졌음** — PR #19 에서 테스트를
+    파이썬 스크립트로 생성했는데 문자열의 `\v` 가 **수직 탭(0x0B)** 으로 해석돼
+    `@"D:\videos\movie.srt"` 가 `@"D:<VT>ideos\movie.srt"` 가 됐습니다.
+    - **테스트는 통과했습니다.** 후보 경로와 출력 경로가 똑같이 깨져 비교가 여전히 맞아
+      떨어졌고, `Path.GetFullPath` 도 수직 탭을 파일명 문자로 받아들여 예외를 내지 않았습니다.
+      통과하는 테스트가 엉뚱한 입력을 검증하고 있던 것입니다.
+    - 같은 세션에서 `changes.txt` 의 UNC 예시(`\서버\공유`)도 같은 이유로 두 번 깨졌습니다.
+    - **셸 → 파이썬 → 파일을 거쳐 경로 리터럴을 써 넣지 마세요.** 꼭 해야 하면 heredoc
+      (`<<'PY'`) + raw 문자열을 쓰고, 쓴 뒤에 `repr()` 로 실제 바이트를 확인하세요.
+
 **패턴**: 실패한 것들은 전부 *자동 테스트가 통과하는데 실기에서 깨지는* 종류였습니다.
 플랫폼 차이(PS 5.1 vs pwsh 7), 외부 서비스의 실제 응답, GPU 유무. 새 기능을 넣을 때
 "이게 CI에서 통과하는데 사용자 PC에서 깨질 수 있는 이유가 있나?"를 먼저 물어보세요.
@@ -440,7 +464,9 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
    감수할 만한 품질 차이인지가 판단 기준입니다.
 5. WPF 화면 나머지 확인 — 진행 중 상태 열이 단계에 따라 바뀌는지, 선택 항목 제거가 캐시까지
    지우는지. (상태 열 `취소됨` 표시, 버튼 비활성화, 알림 창은 확인됨)
-6. 처리 방식 B/C 실측, `build-installer.ps1`로 설치 프로그램 생성.
+6. 처리 방식 B/C 실측. 설치 프로그램은 **생성은 됩니다**(§6.14) — 남은 것은 실제로
+   설치·업그레이드·제거를 돌려 보는 것입니다. 기존 설치가 `C:\Dev\KSubMaker`에 있으므로
+   업그레이드 경로까지 한 번에 확인됩니다.
 7. 남은 기능 제한: Fake AI 모드가 자막 원본 override를 무시하고 **설정 지문 무효화도 없음**
    (§6.6), 이미지 기반 내부 자막(PGS/VobSub) 선택은 되지만 처리 실패.
    `IModelManager.ResolveModelIdAsync`는 §6.11 이후로도 호출부가 없는 죽은 코드입니다 —
@@ -457,5 +483,6 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
   (`Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` + `Unblock-File`).
 - 프로토콜을 바꾸면 `AGENTS.md §6` 절차를 따르세요: 버전 올리기 → C#/Python 양쪽 → 문서 →
   왕복 테스트. 지금까지 1.0 → 1.1(출력 충돌 정책, 자막 언어) → 1.2(CUDA 라이브러리 상태) →
-  1.3(`extractAudio` 미리 추출 명령).
+  1.3(`extractAudio` 미리 추출 명령) → 1.4(`settings.initialPrompt`) →
+  1.5(`sourceMode: "externalSubtitle"` + `process.subtitlePath`).
 - 커밋 메시지는 한국어, 무엇을 왜 고쳤는지 서술형으로 씁니다. `git log`가 실제 사례입니다.
