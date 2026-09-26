@@ -137,6 +137,36 @@ public static class ExternalSubtitleSelector
         return best;
     }
 
+    /// <summary>
+    /// Whether this file can be translated on its own — i.e. is a subtitle format we can turn into
+    /// cues. Used by the scan to pick up subtitles that have no video beside them.
+    /// </summary>
+    public static bool IsTranslatableSubtitle(string? path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && ReadableExtensions.Contains(Path.GetExtension(path))
+        && !OutputPathResolver.LooksKorean(path);
+
+    /// <summary>
+    /// The file's name with its extension and any trailing language tag removed:
+    /// <c>movie.ja.srt</c> → <c>movie</c>, <c>movie.srt</c> → <c>movie</c>.
+    ///
+    /// <para>Without this a subtitle-only job writes <c>movie.ja.ko.srt</c>, because the "base name"
+    /// of <c>movie.ja.srt</c> is <c>movie.ja</c>. Only tags that really look like a language are
+    /// stripped, so <c>movie.forced.srt</c> keeps its <c>forced</c>.</para>
+    /// </summary>
+    public static string BaseNameWithoutLanguageTag(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+
+        var lastDot = name.LastIndexOf('.');
+        if (lastDot <= 0)
+        {
+            return name;
+        }
+
+        return Normalize(name[(lastDot + 1)..]) is null ? name : name[..lastDot];
+    }
+
     /// <summary>Path comparison that survives <c>..</c>, mixed separators and casing.</summary>
     private static bool SamePath(string left, string right)
     {

@@ -32,7 +32,11 @@ public static class OutputPathResolver
         ArgumentException.ThrowIfNullOrWhiteSpace(videoPath);
 
         var directory = Path.GetDirectoryName(videoPath) ?? string.Empty;
-        var baseName = Path.GetFileNameWithoutExtension(videoPath);
+        // 자막 파일 자체가 원본이면 언어 태그를 떼야 한다 — movie.ja.srt 의 "확장자 없는 이름"
+        // 은 movie.ja 라서, 그대로 쓰면 결과가 movie.ja.ko.srt 가 된다.
+        var baseName = ExternalSubtitleSelector.IsTranslatableSubtitle(videoPath)
+            ? ExternalSubtitleSelector.BaseNameWithoutLanguageTag(videoPath)
+            : Path.GetFileNameWithoutExtension(videoPath);
 
         // A blank suffix is a real choice — "write it as {video}.srt" — not a mistake to correct to
         // "ko". The user is warned in the settings hint that players will not language-detect it.
