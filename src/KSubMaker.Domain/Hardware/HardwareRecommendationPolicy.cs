@@ -1,3 +1,4 @@
+using System.Globalization;
 using KSubMaker.Domain.Models;
 using KSubMaker.Domain.Settings;
 
@@ -47,6 +48,13 @@ public static class HardwareRecommendationPolicy
         var vram = profile.PrimaryVramGb;
         var (whisperId, computeType, beam) = SelectWhisper(vram);
 
+        // Pascal cards have the VRAM for a float16 model but not the arithmetic. Fold the choice
+        // down before anything else reads it.
+        if (LacksUsableFloat16(profile.PrimaryGpu) && IsFloat16(computeType))
+        {
+            computeType = ComputeType.Int8;
+        }
+
         var translationId = vram switch
         {
             >= 12d => ModelIds.TranslationNllb13B,
@@ -81,9 +89,16 @@ public static class HardwareRecommendationPolicy
             strategy = ProcessingStrategy.PipelinedParallel;
         }
 
+        // Say *why* int8 on a card whose VRAM would otherwise suggest float16 — otherwise the
+        // recommendation reads like the app under-rating the GPU.
+        var pascalNote = LacksUsableFloat16(profile.PrimaryGpu)
+            ? "이 GPU 세대는 float16 연산이 float32보다 느려 int8을 권장합니다. "
+            : string.Empty;
+
         var rationale =
             $"{profile.PrimaryGpu!.Name} (VRAM {vram:0.#}GB) 감지됨. " +
             $"Whisper {whisperId} / {Describe(computeType)} 권장. " +
+            pascalNote +
             $"번역 모델 {translationId}. " +
             (canCoReside
                 ? "음성 인식과 번역 모델을 동시에 유지할 수 있어 파일 단위 순차 처리(방식 A)를 사용합니다."
@@ -103,6 +118,82 @@ public static class HardwareRecommendationPolicy
             Rationale = rationale
         };
     }
+
+    /// <summary>
+    /// Whether this GPU can run a float16 model at a usable speed.
+    ///
+    /// <para>Pascal (compute capability 6.x — GTX 10 시리즈, TITAN X/Xp, Quadro P) is the case this
+    /// exists for. GP104/GP106 run fp16 arithmetic at <b>1/64</b> of their fp32 rate, so a card with
+    /// plenty of VRAM for a float16 model still cannot execute one: a user reported a GTX 1060
+    /// failing to load the model at 10% and the same run working the moment the compute type was
+    /// switched to int8.</para>
+    ///
+    /// <para>Decided on <see cref="GpuInfo.ComputeCapability"/> when <c>nvidia-smi</c> reported one,
+    /// and on the model name otherwise — older drivers do not answer <c>compute_cap</c>. An unknown
+    /// card is treated as capable: over-recommending int8 costs a little accuracy, but refusing
+    /// float16 on hardware that has it would slow every modern card down.</para>
+    /// </summary>
+    public static bool LacksUsableFloat16(GpuInfo? gpu)
+    {
+        if (gpu is null)
+        {
+            return false;
+        }
+
+        if (TryParseMajorCapability(gpu.ComputeCapability, out var major))
+        {
+            // Maxwell (5.x) has no fp16 path at all; Pascal (6.x) has one that is slower than fp32.
+            // Volta (7.0) onward carries tensor cores.
+            return major <= 6;
+        }
+
+        return LooksPascalByName(gpu.Name);
+    }
+
+    private static bool TryParseMajorCapability(string? capability, out int major)
+    {
+        major = 0;
+
+        if (string.IsNullOrWhiteSpace(capability))
+        {
+            return false;
+        }
+
+        var head = capability.Split('.', 2)[0].Trim();
+        return int.TryParse(head, NumberStyles.Integer, CultureInfo.InvariantCulture, out major);
+    }
+
+    /// <summary>
+    /// Name fallback for drivers that do not report <c>compute_cap</c>. Matches the GTX 10 series
+    /// and the Pascal TITAN/Quadro parts, and deliberately not the GTX 16 series (Turing, 7.5) whose
+    /// names also start with "GTX 1".
+    /// </summary>
+    private static bool LooksPascalByName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var n = name.ToUpperInvariant();
+
+        // "GTX 1660"/"GTX 1650" are Turing and must not match, so the series digits are checked
+        // explicitly rather than with a "GTX 10" prefix that also accepts "GTX 1060 Ti" only.
+        foreach (var series in new[] { "1030", "1050", "1060", "1070", "1080" })
+        {
+            if (n.Contains(series, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return n.Contains("TITAN X", StringComparison.Ordinal)
+            || n.Contains("TITAN XP", StringComparison.Ordinal)
+            || (n.Contains("QUADRO P", StringComparison.Ordinal) && !n.Contains("QUADRO PRO", StringComparison.Ordinal));
+    }
+
+    private static bool IsFloat16(ComputeType computeType) =>
+        computeType is ComputeType.Float16 or ComputeType.BFloat16 or ComputeType.Int8Float16;
 
     /// <summary>
     /// VRAM tiers. Deliberately conservative: an under-recommended model that finishes beats an

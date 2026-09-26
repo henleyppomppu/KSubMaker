@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from . import errors
+from . import errors, hardware_detector
 from .cancellation import CancellationToken
 from .cuda_setup import missing_cuda_library, remedy_message
 from .errors import WorkerError
@@ -467,7 +467,17 @@ def _resolve_device(device: str) -> str:
 def _default_compute_type(device: str) -> str:
     # int8 on CPU is both faster and the only type CTranslate2 supports everywhere; float16 needs
     # a GPU. Getting this wrong is an immediate hard failure inside CTranslate2, not a slowdown.
-    return "float16" if device == "cuda" else "int8"
+    if device != "cuda":
+        return "int8"
+
+    # Having a CUDA device is not the same as being able to execute float16 on it. Pascal cards
+    # run fp16 at a fraction of their fp32 rate, and this is the branch an "auto" user reaches —
+    # the host sends computeType=null and never gets to apply its own recommendation.
+    if hardware_detector.lacks_usable_float16():
+        _log.info("이 GPU 세대는 float16 연산이 느려 int8로 전환합니다.")
+        return "int8"
+
+    return "float16"
 
 
 def _looks_missing(exc: BaseException) -> bool:
