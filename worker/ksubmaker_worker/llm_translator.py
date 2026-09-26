@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Final, Sequence
 
 from . import errors
 from .batching import BatchOptions, split_batches, translate_with_retry
@@ -179,6 +179,20 @@ _MSVC_RUNTIME_DLLS: tuple[str, ...] = ("vcruntime140.dll", "vcruntime140_1.dll",
 #: NTSTATUS STATUS_DLL_NOT_FOUND, as Python reports it for a process the loader could not start.
 _STATUS_DLL_NOT_FOUND = -1073741515
 
+#: llama-server 가 CUDA 백엔드에서 죽을 때 남기는 흔적. 번들한 CUDA 빌드가 이 GPU 세대용
+#: 커널을 담고 있지 않으면 여기로 떨어진다 — CUDA 13 빌드에는 Pascal(6.x) 커널이 없다.
+_CUDA_FAILURE_MARKERS: Final = ("ggml-cuda", "cuda error", "no kernel image", "cublas")
+
+
+def looks_like_gpu_startup_failure(detail: str | None) -> bool:
+    """Whether a llama-server startup death looks like the GPU rather than the model file.
+
+    Deliberately loose. Getting a false positive costs one extra start attempt on the CPU; getting
+    a false negative costs the user a failed job with a message blaming their model file.
+    """
+    text = (detail or "").lower()
+    return any(marker in text for marker in _CUDA_FAILURE_MARKERS)
+
 MSVC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 
 _MSVC_REMEDY = (
@@ -276,6 +290,8 @@ class LlamaServer:
         self.model_path = Path(model_path)
         self.executable = executable
         self.n_gpu_layers = n_gpu_layers
+        #: CPU 재시도는 한 번뿐이다. 두 번째 실패는 GPU 와 무관한 진짜 문제이므로 그대로 올린다.
+        self._cpu_fallback_tried = False
         self.context_size = context_size
         self.extra_args = list(extra_args or [])
         self.port: int | None = None
@@ -372,7 +388,27 @@ class LlamaServer:
             if token is not None:
                 token.register_process(self.process)
 
-        self._wait_for_health(session, token)
+        try:
+            self._wait_for_health(session, token)
+        except WorkerError as exc:
+            # A GPU the bundled CUDA build has no kernels for takes llama-server down during
+            # startup — reported as "모델 파일이 손상되었을 수 있습니다", which sends the user
+            # looking in the wrong place. Retrying with no offload turns a failed job into a slow
+            # one, which is the better failure.
+            if (
+                layers <= 0
+                or self._cpu_fallback_tried
+                or not looks_like_gpu_startup_failure(exc.detail)
+            ):
+                raise
+
+            self._cpu_fallback_tried = True
+            _log.warning(
+                "GPU 에서 번역 서버를 띄우지 못했습니다. CPU 로 다시 시도합니다. (%s)", exc.detail
+            )
+            self.stop()
+            self.n_gpu_layers = 0
+            self.start(session, token)
 
     def _wait_for_health(self, session: Any, token: CancellationToken | None) -> None:
         deadline = time.monotonic() + _HEALTH_TIMEOUT_SECONDS

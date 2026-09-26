@@ -545,3 +545,48 @@ def test_unload_stops_the_server() -> None:
     engine.unload()
 
     assert server.stopped is True
+
+
+# ---------------------------------------------------------------------------
+# GPU 로 못 띄우는 카드 — 실패 대신 CPU 로
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        # 실기 신고(GTX 1070) 의 detail 을 그대로 옮긴 것.
+        "llama-server exited with 3221226505: ggml-cuda.cu:106: CUDA error",
+        "no kernel image is available for execution on the device",
+        "cublas64_12.dll load failed",
+    ],
+)
+def test_a_cuda_startup_death_is_recognised(detail: str) -> None:
+    """번들한 CUDA 빌드에 이 GPU 세대 커널이 없으면 llama-server 가 시작 중에 죽는다.
+
+    CUDA 13 빌드에는 Pascal(6.x) 커널이 아예 없다. 그것을 '모델 파일이 손상되었을 수 있습니다'
+    로 보고하면 사용자가 엉뚱한 곳을 찾는다.
+    """
+    assert llm.looks_like_gpu_startup_failure(detail)
+
+
+@pytest.mark.parametrize(
+    "detail",
+    ["llama-server exited with 1: failed to load model: bad magic", "", None],
+)
+def test_an_ordinary_failure_is_not_mistaken_for_a_gpu_one(detail: str | None) -> None:
+    # 오탐은 CPU 로 한 번 더 시도하는 비용이지만, 누락은 실패한 작업이다 — 느슨한 쪽이 맞다.
+    assert not llm.looks_like_gpu_startup_failure(detail)
+
+
+def test_a_three_gigabyte_card_never_offloads() -> None:
+    """GTX 1060 3GB 가 '동작한' 이유. GPU 를 안 썼기 때문이지 지원돼서가 아니다.
+
+    같은 파스칼이라도 VRAM 이 넉넉한 1070 은 임계값을 넘겨 오프로드하고, 그래서 죽었다.
+    """
+    three_gb = int(2.8 * 1024**3)
+    assert llm.choose_gpu_layers(three_gb) == 0
+
+    seven_gb = int(7.0 * 1024**3)
+    assert llm.choose_gpu_layers(seven_gb) > 0
+

@@ -112,7 +112,17 @@ try {
             $AssetPattern = '*win*cpu*x64*.zip'
         }
         else {
-            $AssetPattern = '*win*cuda*x64*.zip'
+            # CUDA **12** 를 고른다. llama.cpp 는 win-cuda-12.4 와 win-cuda-13.x 를 모두 내는데,
+            # CUDA 13.0 이 Maxwell/Pascal/Volta 지원을 제거했다(최소 Turing 7.5). ggml 의 아키텍처
+            # 기본값도 `CUDAToolkit_VERSION VERSION_LESS "13"` 일 때만 50/61/70-virtual 을 넣는다.
+            #
+            # 실기 신고: GTX 1070 에서 llama-server 가 ggml-cuda.cu 의 CUDA error 로 즉사했다.
+            # 같은 카드에서 음성 인식은 멀쩡했는데, 그쪽은 §4.3 에 따라 CUDA 12 로 고정돼 있다.
+            #
+            # 교환 조건: CUDA 12.4 런타임은 Blackwell(RTX 50, 12.0) 보다 먼저 나왔으므로 그쪽에서
+            # 동작하지 않을 수 있다. 그때는 llm_translator 의 CPU 재시도가 받아낸다 — 느려지지만
+            # 실패하지는 않는다. GTX 10 시리즈 사용자가 훨씬 많다고 보고 이쪽을 골랐다.
+            $AssetPattern = '*win-cuda-12*x64*.zip'
         }
     }
 
