@@ -78,6 +78,8 @@ class FakeTranscriber:
         self.oom_times = oom_times
         self.calls: list[dict[str, Any]] = []
         self.unload_count = 0
+        #: 감지 언어. 원어 자막 파일 이름이 이것을 따르므로 테스트가 바꿀 수 있어야 한다.
+        self.language = "en"
         self._segments = segments or [
             {"id": 1, "start": 0.0, "end": 2.0, "text": "Hello there.", "words": []},
             {"id": 2, "start": 2.5, "end": 5.0, "text": "General Kenobi.", "words": []},
@@ -95,7 +97,7 @@ class FakeTranscriber:
 
         on_language = kwargs.get("on_language")
         if on_language is not None:
-            on_language("en", 0.99)
+            on_language(self.language, 0.99)
 
         on_progress = kwargs.get("on_progress")
         if on_progress is not None:
@@ -103,7 +105,7 @@ class FakeTranscriber:
             on_progress(100.0, 3.0)
 
         return {
-            "sourceLanguage": "en",
+            "sourceLanguage": self.language,
             "languageProbability": 0.99,
             "durationSeconds": 9.0,
             "modelId": kwargs.get("model_id", "whisper-small"),
@@ -1489,6 +1491,85 @@ def test_a_host_that_sends_no_prompt_leaves_the_built_in_hint_alone(
     job = CheckpointStore(tmp_path / "cache" / "job-1").load_job()
     assert job is not None
     assert job["transcriptionSettings"]["initialPrompt"] is None
+
+
+def test_the_source_subtitle_is_saved_beside_the_translation(tmp_path: Path, channel) -> None:
+    """v1.6. 전사는 어차피 캐시에 있다 — 이 옵션은 사용자가 볼 수 있는 곳에 사본을 둘지만 정한다."""
+    handlers, _, _, _ = _handlers()
+
+    command = _command(tmp_path)
+    command["settings"] = dict(command["settings"], saveSourceSubtitle=True, language="ja")
+    handlers.process(command, CancellationToken("t"))
+
+    # FakeTranscriber 가 감지 언어로 en 을 보고하므로 이름도 그것을 따른다.
+    assert (tmp_path / "movie.en.srt").is_file()
+    assert Path(command["outputPath"]).is_file(), "번역본은 그대로 있어야 한다"
+
+
+def test_the_source_subtitle_is_not_saved_unless_asked(tmp_path: Path, channel) -> None:
+    handlers, _, _, _ = _handlers()
+
+    handlers.process(_command(tmp_path), CancellationToken("t"))
+
+    assert not (tmp_path / "movie.en.srt").exists()
+
+
+def test_the_source_subtitle_never_replaces_the_translation(tmp_path: Path, channel) -> None:
+    """원어가 한국어이고 접미사가 기본값이면 두 이름이 같아진다 — 그때는 쓰지 않는다.
+
+    쓰면 번역본을 그 입력으로 덮어쓴다. 되돌릴 수 없는 손실이라 조용히 건너뛰는 쪽이 옳다.
+    """
+    handlers, _, transcriber, _ = _handlers()
+    transcriber.language = "ko"
+
+    command = _command(tmp_path)
+    command["outputPath"] = str(tmp_path / "movie.ko.srt")
+    # 동일 언어 생략을 꺼야 번역이 실제로 돌아 원문과 구분되는 내용이 나온다.
+    command["settings"] = dict(
+        command["settings"], saveSourceSubtitle=True, skipTranslationForSameLanguage=False
+    )
+    handlers.process(command, CancellationToken("t"))
+
+    written = Path(command["outputPath"]).read_text(encoding="utf-8")
+    assert "번역" in written, "번역본이 원문으로 덮어써지면 안 된다"
+
+
+def test_the_source_subtitle_never_overwrites_the_sidecar_it_read(tmp_path: Path, channel) -> None:
+    handlers, _, _, _ = _handlers()
+
+    sidecar = tmp_path / "movie.en.srt"
+    # 이스케이프 시퀀스를 소스에 써 넣지 않는다 (§6.15) — 줄바꿈은 join 으로 만든다.
+    sidecar.write_text(
+        chr(10).join(["1", "00:00:01,000 --> 00:00:03,000", "Original.", ""]),
+        encoding="utf-8",
+    )
+    before = sidecar.read_bytes()
+
+    command = _command(
+        tmp_path,
+        sourceMode="externalSubtitle",
+        subtitlePath=str(sidecar),
+        subtitleLanguage="en",
+    )
+    command["settings"] = dict(command["settings"], saveSourceSubtitle=True)
+    handlers.process(command, CancellationToken("t"))
+
+    assert sidecar.read_bytes() == before, "읽고 있던 파일을 다시 쓰면 안 된다"
+
+
+def test_a_failure_to_save_the_source_subtitle_does_not_fail_the_job(tmp_path: Path, channel) -> None:
+    """번역본은 이미 디스크에 있다. 편의 파일 하나 때문에 끝난 작업을 실패로 만들 이유가 없다."""
+    handlers, _, _, _ = _handlers()
+
+    command = _command(tmp_path)
+    command["settings"] = dict(command["settings"], saveSourceSubtitle=True)
+    # 쓰려는 이름 자리에 디렉터리를 만들어 두면 쓰기가 실패한다.
+    (tmp_path / "movie.en.srt").mkdir()
+
+    handlers.process(command, CancellationToken("t"))
+
+    assert channel.first("completed") is not None
+    assert channel.first("error") is None
 
 
 def test_a_prefetch_for_a_different_track_is_redone_by_the_job(tmp_path: Path, channel) -> None:

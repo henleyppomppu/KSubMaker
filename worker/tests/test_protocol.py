@@ -176,8 +176,9 @@ def test_wire_names_match_the_csharp_constants() -> None:
     # 1.3: the extractAudio command.
     # 1.4: settings.initialPrompt.
     # 1.5: sourceMode "externalSubtitle" + process.subtitlePath.
+    # 1.6: settings.saveSourceSubtitle.
     # Keep in step with ProtocolConstants.Version on the C# side.
-    assert protocol.PROTOCOL_VERSION == "1.5"
+    assert protocol.PROTOCOL_VERSION == "1.6"
     assert protocol.SourceModes.EXTERNAL_SUBTITLE == "externalSubtitle"
     assert protocol.Commands.DETECT_HARDWARE == "detectHardware"
     assert protocol.Commands.EXTRACT_AUDIO == "extractAudio"

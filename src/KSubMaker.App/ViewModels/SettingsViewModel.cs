@@ -295,6 +295,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private string _outputDirectory = string.Empty;
 
     [ObservableProperty]
+    private bool _saveSourceSubtitle;
+
+    [ObservableProperty]
     private string _cacheDirectory = string.Empty;
 
     [ObservableProperty]
@@ -688,6 +691,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         RetryFailedOnly = settings.RetryFailedOnly;
 
         OutputDirectory = settings.OutputDirectory;
+        SaveSourceSubtitle = settings.SaveSourceSubtitle;
         CacheDirectory = settings.CacheDirectory;
         ModelDirectory = settings.ModelDirectory;
         LogDirectory = settings.LogDirectory;
@@ -759,6 +763,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         settings.RetryFailedOnly = RetryFailedOnly;
 
         settings.OutputDirectory = OutputDirectory.Trim();
+        settings.SaveSourceSubtitle = SaveSourceSubtitle;
         settings.CacheDirectory = CacheDirectory.Trim();
         settings.ModelDirectory = ModelDirectory.Trim();
         settings.LogDirectory = LogDirectory.Trim();

@@ -423,12 +423,13 @@ public sealed class WorkerProtocolSerializerTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void The_protocol_version_is_1_5()
+    public void The_protocol_version_is_1_6()
     {
         // 1.2 was the hardware event's three CUDA fields; 1.3 added the extractAudio command;
-        // 1.4 added settings.initialPrompt; 1.5 added the externalSubtitle source mode.
+        // 1.4 added settings.initialPrompt; 1.5 added the externalSubtitle source mode;
+        // 1.6 added settings.saveSourceSubtitle.
         // The Python mirror asserts the same literal (worker/tests/test_protocol.py).
-        ProtocolConstants.Version.Should().Be("1.5");
+        ProtocolConstants.Version.Should().Be("1.6");
         SourceModes.ExternalSubtitle.Should().Be("externalSubtitle");
     }
 

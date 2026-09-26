@@ -25,7 +25,7 @@ public static class ProtocolConstants
     /// answers it with <c>PROTOCOL_ERROR</c>, which the host treats as "prefetch unavailable" and
     /// carries on — extraction then simply happens inside the job as before.
     /// </summary>
-    public const string Version = "1.5";
+    public const string Version = "1.6";
 
     public static class Commands
     {

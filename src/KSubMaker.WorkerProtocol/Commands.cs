@@ -132,6 +132,20 @@ public sealed record WorkerJobSettings
     [JsonPropertyName("skipTranslationForSameLanguage")]
     public bool SkipTranslationForSameLanguage { get; init; } = true;
 
+    /// <summary>
+    /// <b>v1.6.</b> Also write the recognised source text as its own SRT, beside the Korean one.
+    ///
+    /// <para>The transcript already exists — it is written to the job's cache either way — so this
+    /// only decides whether a copy is kept where the user can find it. The file lands in the same
+    /// directory as <see cref="ProcessCommand.OutputPath"/>, tagged with the detected language
+    /// (<c>movie.ja.srt</c>), so the two subtitles always travel together.</para>
+    ///
+    /// <para>The worker skips it rather than failing when the name would collide with the
+    /// translation's own path or with a sidecar it is reading as its source.</para>
+    /// </summary>
+    [JsonPropertyName("saveSourceSubtitle")]
+    public bool SaveSourceSubtitle { get; init; }
+
     [JsonPropertyName("testDurationSeconds")]
     public int TestDurationSeconds { get; init; } = 0;
 

@@ -35,7 +35,9 @@ from typing import IO, Any, Final
 #: 1.5 added ``sourceMode: "externalSubtitle"`` and ``process.subtitlePath``. A 1.4 worker rejects
 #: the mode, and the host's own default policy never selects it, so nothing changes for a host that
 #: does not ask for it.
-PROTOCOL_VERSION: Final = "1.5"
+#: 1.6 added ``settings.saveSourceSubtitle``. Off by default and it only writes an extra file,
+#: so a 1.5 host that never sends it behaves exactly as before.
+PROTOCOL_VERSION: Final = "1.6"
 
 
 class Commands:

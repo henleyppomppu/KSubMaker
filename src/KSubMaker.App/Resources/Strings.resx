@@ -941,6 +941,12 @@
   <data name="OutputDirectoryLabel" xml:space="preserve">
     <value>결과 폴더</value>
   </data>
+  <data name="SaveSourceSubtitleLabel" xml:space="preserve">
+    <value>원어 자막도 함께 저장</value>
+  </data>
+  <data name="SaveSourceSubtitleHint" xml:space="preserve">
+    <value>음성 인식 결과를 감지된 언어 이름으로 한국어 자막과 같은 폴더에 저장합니다 (영상이름.ja.srt). 다음에 같은 영상을 다시 처리할 때 이 파일을 원본으로 써서 음성 인식을 건너뛸 수 있습니다.</value>
+  </data>
   <data name="OutputDirectoryHint" xml:space="preserve">
     <value>비워 두면 원본 영상과 같은 폴더에 저장합니다. 지정하면 원본 폴더 구조를 그 아래에 그대로 만들어 저장합니다. 이미 자막이 만들어진 파일은 완료로 판정되어 새 위치에 다시 만들어지지 않습니다 — 옮기려면 '이미 자막이 있는 파일'을 '무시하고 다시 만들기'로 바꾸세요.</value>
   </data>
