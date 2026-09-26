@@ -111,6 +111,7 @@ public sealed class SettingsRepository(
         settings.OutputConflictPolicy = GetEnum(rows, nameof(settings.OutputConflictPolicy), settings.OutputConflictPolicy);
         settings.OutputSuffix = GetString(rows, nameof(settings.OutputSuffix), settings.OutputSuffix);
         settings.OutputDirectory = GetString(rows, nameof(settings.OutputDirectory), settings.OutputDirectory);
+        settings.SaveSourceSubtitle = GetBool(rows, nameof(settings.SaveSourceSubtitle), settings.SaveSourceSubtitle);
         settings.MaxLinesPerCue = GetInt(rows, nameof(settings.MaxLinesPerCue), settings.MaxLinesPerCue);
         settings.MaxCharsPerLine = GetInt(rows, nameof(settings.MaxCharsPerLine), settings.MaxCharsPerLine);
         settings.MinCueDurationSeconds = GetDouble(rows, nameof(settings.MinCueDurationSeconds), settings.MinCueDurationSeconds);
@@ -216,6 +217,7 @@ public sealed class SettingsRepository(
             [nameof(s.OutputConflictPolicy)] = s.OutputConflictPolicy.ToString(),
             [nameof(s.OutputSuffix)] = s.OutputSuffix,
             [nameof(s.OutputDirectory)] = s.OutputDirectory,
+            [nameof(s.SaveSourceSubtitle)] = Write(s.SaveSourceSubtitle),
             [nameof(s.MaxLinesPerCue)] = Write(s.MaxLinesPerCue),
             [nameof(s.MaxCharsPerLine)] = Write(s.MaxCharsPerLine),
             [nameof(s.MinCueDurationSeconds)] = Write(s.MinCueDurationSeconds),

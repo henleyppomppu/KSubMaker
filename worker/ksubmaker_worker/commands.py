@@ -145,6 +145,50 @@ def _reached_stage(store: CheckpointStore, stage: str) -> bool:
     return Stages.ORDER.index(recorded) >= Stages.ORDER.index(stage)
 
 
+def _source_subtitle_path(
+    command: Mapping[str, Any], output_path: str, language: str
+) -> str | None:
+    """Where the source-language SRT goes, or None when it must not be written.
+
+    ``{output dir}/{video base name}.{detected language}.srt`` — the translation's directory, the
+    video's name, the language the recogniser actually reported.
+
+    Returns None in three cases, each of which would destroy something:
+
+    * **No language.** Without a tag the name collides with a blank-suffix translation, and a
+      subtitle labelled with nothing is not useful anyway.
+    * **Same path as the translation.** Happens when the source really is Korean and the output
+      suffix is the default ``ko``. Writing here would replace the translation with its own input.
+    * **Same path as the sidecar being read as the source** (``sourceMode=externalSubtitle``).
+      Rewriting the file mid-read is pointless at best.
+    """
+    if not language or language == "auto":
+        return None
+
+    video_path = str(command.get("videoPath") or "")
+    if not video_path or not output_path:
+        return None
+
+    directory = Path(output_path).parent
+    target = directory / f"{Path(video_path).stem}.{language}.srt"
+
+    if _same_path(target, output_path):
+        return None
+
+    subtitle_path = command.get("subtitlePath")
+    if subtitle_path and _same_path(target, str(subtitle_path)):
+        return None
+
+    return str(target)
+
+
+def _same_path(left: Path | str, right: Path | str) -> bool:
+    try:
+        return Path(left).resolve() == Path(right).resolve()
+    except OSError:
+        return str(left).lower() == str(right).lower()
+
+
 def _test_duration(settings: Mapping[str, Any] | None) -> float | None:
     """``testDurationSeconds`` as a trim length, or ``None`` for "process the whole file".
 
@@ -790,6 +834,16 @@ class CommandHandlers:
         conflict_policy = str(settings.get("outputConflictPolicy") or "skip")
         written, reason = write_subtitle_file(cues, output_path, conflict_policy)
 
+        if bool(settings.get("saveSourceSubtitle", False)):
+            self._write_source_subtitle(
+                command,
+                segments=segments,
+                options=options,
+                output_path=output_path,
+                language=str(transcription.get("sourceLanguage") or ""),
+                conflict_policy=conflict_policy,
+            )
+
         store.save_finalization(
             output_path=written,
             cue_count=len(cues),
@@ -1051,6 +1105,50 @@ class CommandHandlers:
             "modelId": "embeddedSubtitle",
             "segments": segments,
         }
+
+    def _write_source_subtitle(
+        self,
+        command: Mapping[str, Any],
+        *,
+        segments: list[dict[str, Any]],
+        options: "FormattingOptions",
+        output_path: str,
+        language: str,
+        conflict_policy: str,
+    ) -> None:
+        """v1.6. Keep the recognised source text as its own SRT, beside the translation.
+
+        The transcript exists either way — it is in the job's cache — so this only decides whether
+        a copy lands where the user can see it. It goes in the **same directory as the translation**
+        rather than next to the video: an output folder is usually chosen to keep subtitles out of
+        the video folder, and writing the source one there anyway would defeat that.
+
+        Never fails the job. The translation is already on disk by this point, and losing a
+        convenience file is not worth turning a finished run into a failed one.
+        """
+        target = _source_subtitle_path(command, output_path, language)
+        if target is None:
+            return
+
+        try:
+            # build_cues joins segments to translations by id and **drops anything unmatched** —
+            # an untranslated line in a Korean file reads as a bug. Here the source text *is* the
+            # content, so it is passed in the translation slot.
+            source_text = {
+                int(seg.get("id", 0) or 0): str(seg.get("text") or "") for seg in segments
+            }
+            cues = build_cues(segments, source_text, options)
+            if not cues:
+                _log.info("원어 자막에 담을 내용이 없어 건너뜁니다.")
+                return
+
+            written, reason = write_subtitle_file(cues, target, conflict_policy)
+            if written:
+                _log.info("원어 자막을 저장했습니다: %s", written)
+            else:
+                _log.info("원어 자막을 저장하지 않았습니다: %s", reason)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("원어 자막을 저장하지 못했습니다: %r", exc)
 
     def _from_external_subtitle(
         self,

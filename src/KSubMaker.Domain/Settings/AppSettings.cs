@@ -77,6 +77,16 @@ public sealed class AppSettings
     /// </summary>
     public string OutputDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Also keep the recognised source text as its own SRT, in the same folder as the Korean one
+    /// and tagged with the detected language (<c>movie.ja.srt</c>).
+    ///
+    /// <para>Off by default: it is an extra file most users do not want, and the transcript is in
+    /// the job cache regardless. Turning it on also makes the next run cheaper — the sidecar
+    /// becomes a usable translation source, so ASR can be skipped entirely.</para>
+    /// </summary>
+    public bool SaveSourceSubtitle { get; set; }
+
     public int MaxLinesPerCue { get; set; } = 2;
     public int MaxCharsPerLine { get; set; } = 22;
     public double MinCueDurationSeconds { get; set; } = 1.0;

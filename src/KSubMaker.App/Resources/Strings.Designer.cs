@@ -905,6 +905,10 @@ public static partial class Strings
     public static string OutputDirectoryLabel => Get(nameof(OutputDirectoryLabel));
 
     /// <summary>비워 두면 원본 영상과 같은 폴더에 저장합니다. 지정하면 원본 폴더 구조를 그 아래에 그대로 만들어 저장합니다. 이미 자막이 만들어진 파일은 완료로 판정되어 새 위치에 다시 만들어지지 않습니다 — 옮기려면 '이미 자막이 있는 파일'을 '무시하고 다시 만들기'로 바꾸세요.</summary>
+    public static string SaveSourceSubtitleLabel => Get(nameof(SaveSourceSubtitleLabel));
+
+    public static string SaveSourceSubtitleHint => Get(nameof(SaveSourceSubtitleHint));
+
     public static string OutputDirectoryHint => Get(nameof(OutputDirectoryHint));
 
     /// <summary>폴더</summary>
