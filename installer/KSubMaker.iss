@@ -3,11 +3,11 @@
 ;
 ;  scripts\build-installer.ps1 이 아래 심볼을 정의해서 ISCC 를 호출합니다.
 ;
-;      /DAppVersion=1.2.0
+;      /DAppVersion=1.2.1
 ;      /DPublishDir=<저장소>\publish\win-x64-Release
 ;      /DOutputDir=<저장소>\artifacts
 ;      /DRepoRoot=<저장소>
-;      /DSetupBaseName=KSubMaker-1.2.0-setup
+;      /DSetupBaseName=KSubMaker-1.2.1-setup
 ;
 ;  직접 컴파일할 때는 아래 기본값이 쓰입니다.
 ;
@@ -25,7 +25,7 @@
 ; ============================================================================
 
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "1.2.1"
 #endif
 
 #ifndef RepoRoot
