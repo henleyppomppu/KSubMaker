@@ -316,8 +316,13 @@ function Get-KsmGitHubAsset {
 
     Initialize-KsmTls
 
-    if ($Tag -eq 'latest') {
-        $apiUrl = "https://api.github.com/repos/$Repository/releases/latest"
+    # 'latest' 는 저장소가 그렇게 표시한 릴리스일 뿐, **자산이 있는** 릴리스라는 뜻이 아닙니다.
+    # llama.cpp 가 2026-09 에 자산이 nightly-tag.txt 하나뿐인 v0.5.0 을 latest 로 올리면서
+    # fetch-llama.ps1 이 통째로 실패했습니다. 그때는 목록을 받아 뒤로 훑습니다.
+    $useReleaseList = $Tag -eq 'latest'
+
+    if ($useReleaseList) {
+        $apiUrl = "https://api.github.com/repos/$Repository/releases?per_page=30"
     }
     else {
         $apiUrl = "https://api.github.com/repos/$Repository/releases/tags/$Tag"
@@ -342,16 +347,33 @@ function Get-KsmGitHubAsset {
                "  API 요청 한도에 걸렸다면 -GitHubToken 을 지정하거나, -Url 로 자산 주소를 직접 지정하세요.")
     }
 
-    if ($null -eq $release.assets -or @($release.assets).Count -eq 0) {
-        throw "릴리스 '$Tag' 에 자산이 없습니다: $Repository"
+    # 목록 응답이면 최신순으로 훑어 패턴에 맞는 자산을 **가진** 첫 릴리스를 고릅니다.
+    # @() 로 전체를 감싸는 이유는 §4.2 — 속성에만 걸면 뒤따르는 파이프라인이 다시 벗겨냅니다.
+    $candidates = if ($useReleaseList) { @($release) } else { @(, $release) }
+
+    $matched = @()
+    $searched = @()
+
+    foreach ($candidate in $candidates) {
+        $assets = @($candidate.assets)
+        if ($assets.Count -eq 0) { continue }
+
+        $searched += $candidate.tag_name
+        $hit = @($assets | Where-Object { $_.name -like $Pattern })
+
+        if ($hit.Count -gt 0) {
+            $release = $candidate
+            $matched = $hit
+            break
+        }
     }
 
-    $matched = @($release.assets | Where-Object { $_.name -like $Pattern })
-
     if ($matched.Count -eq 0) {
-        $available = ($release.assets | ForEach-Object { "      - $($_.name)" }) -join "`n"
-        throw ("패턴 '$Pattern' 에 맞는 자산을 찾지 못했습니다. ($Repository / $($release.tag_name))`n" +
-               "    사용할 수 있는 자산:`n$available`n" +
+        $lastAssets = if ($searched.Count -gt 0) { @($candidates[0].assets) } else { @() }
+        $available = (@($lastAssets | ForEach-Object { "      - $($_.name)" })) -join "`n"
+        throw ("패턴 '$Pattern' 에 맞는 자산을 찾지 못했습니다. ($Repository / 확인한 릴리스: " +
+               "$(@($searched) -join ', '))`n" +
+               "    가장 최근 릴리스의 자산:`n$available`n" +
                "    -AssetPattern 을 조정하거나 -Url 로 직접 지정하세요.")
     }
 
