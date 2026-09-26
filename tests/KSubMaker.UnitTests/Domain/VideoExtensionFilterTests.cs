@@ -4,17 +4,57 @@ using Xunit;
 
 namespace KSubMaker.UnitTests.Domain;
 
-/// <summary>Covers the "확장자 필터" requirement: all ten extensions, case-insensitively.</summary>
+/// <summary>Covers the "확장자 필터" requirement, case-insensitively.</summary>
 public sealed class VideoExtensionFilterTests
 {
-    public static TheoryData<string> AllVideoExtensions =>
-        new(".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".ts", ".mts", ".m2ts");
+    public static TheoryData<string> AllVideoExtensions
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            foreach (var extension in VideoExtensions.Default)
+            {
+                data.Add(extension);
+            }
+
+            return data;
+        }
+    }
 
     [Fact]
-    public void Default_contains_exactly_the_ten_specified_extensions()
+    public void The_original_ten_extensions_are_still_there()
     {
-        VideoExtensions.Default.Should().BeEquivalentTo(
+        // 목록은 늘어나도 되지만 줄어들면 안 된다 — 여기 있던 것이 빠지면 누군가의 라이브러리가
+        // 통째로 목록에서 사라진다.
+        VideoExtensions.Default.Should().Contain(
             [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".ts", ".mts", ".m2ts"]);
+    }
+
+    [Theory]
+    [InlineData(".mpg")]
+    [InlineData(".mpeg")]
+    [InlineData(".vob")]
+    [InlineData(".flv")]
+    [InlineData(".asf")]
+    [InlineData(".rmvb")]
+    [InlineData(".3gp")]
+    [InlineData(".ogv")]
+    public void The_containers_added_after_the_2026_09_report_are_accepted(string extension)
+    {
+        // "재생은 되는데 KSubMaker 에서는 목록에 뜨지 않는다" 신고로 늘린 것들. 전부 번들한
+        // ffmpeg 가 디먹스할 수 있는 것만 골랐다 — 읽지 못하는 컨테이너를 넣으면 목록에는 뜨고
+        // 처리에서 실패하므로 지금보다 나쁜 경험이 된다.
+        VideoExtensions.IsVideo("/videos/movie" + extension).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(".srt")]
+    [InlineData(".txt")]
+    [InlineData(".jpg")]
+    [InlineData(".iso")]
+    public void Things_that_are_not_a_video_container_stay_out(string extension)
+    {
+        VideoExtensions.IsVideo("/videos/movie" + extension).Should().BeFalse();
     }
 
     [Theory]
