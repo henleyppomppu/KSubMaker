@@ -272,3 +272,56 @@ def test_largest_free_vram_picks_the_roomiest_card() -> None:
 def test_largest_free_vram_tolerates_junk_entries() -> None:
     profile = {"gpus": ["not a dict", {"freeVramBytes": "1234"}, {}]}
     assert largest_free_vram_bytes(profile) == 1234
+
+
+# ---------------------------------------------------------------------------
+# float16 을 쓸 수 없는 세대 — VRAM 은 충분한데 연산이 안 되는 경우
+# ---------------------------------------------------------------------------
+
+
+def _profile(name: str, capability: str | None) -> dict:
+    return {"gpus": [{"name": name, "computeCapability": capability}]}
+
+
+@pytest.mark.parametrize("capability", ["6.1", "6.0", "5.2"])
+def test_pascal_and_older_cannot_use_float16(capability: str) -> None:
+    """실제 신고: GTX 1060 이 10% 에서 모델을 못 불러왔고 int8 로 바꾸니 바로 됐다.
+
+    GP104/GP106 은 fp16 을 fp32 의 1/64 속도로 돌린다. VRAM 만 보고 결정하면 안 되는 이유다.
+    """
+    assert hardware_detector.lacks_usable_float16(_profile("NVIDIA GeForce GTX 1060 6GB", capability))
+
+
+@pytest.mark.parametrize("capability", ["7.0", "7.5", "8.6", "8.9", "12.0"])
+def test_volta_and_newer_keep_float16(capability: str) -> None:
+    assert not hardware_detector.lacks_usable_float16(_profile("NVIDIA GeForce RTX 3080 Ti", capability))
+
+
+@pytest.mark.parametrize(
+    ("name", "pascal"),
+    [
+        ("NVIDIA GeForce GTX 1080 Ti", True),
+        ("NVIDIA GeForce GTX 1050 Ti", True),
+        ("NVIDIA TITAN Xp", True),
+        # Turing 인데 이름이 "GTX 1" 로 시작한다 — 이름 판정의 유일한 함정.
+        ("NVIDIA GeForce GTX 1660 SUPER", False),
+        ("NVIDIA GeForce RTX 4090", False),
+    ],
+)
+def test_the_name_decides_when_the_driver_reports_no_capability(name: str, pascal: bool) -> None:
+    assert hardware_detector.lacks_usable_float16(_profile(name, None)) is pascal
+
+
+def test_an_unknown_or_absent_gpu_is_assumed_capable() -> None:
+    # 모르는 카드에 int8 을 강요하면 최신 GPU 가 전부 느려진다. 반대 방향의 손해가 더 크다.
+    assert not hardware_detector.lacks_usable_float16(_profile("NVIDIA Something New", None))
+    assert not hardware_detector.lacks_usable_float16({"gpus": []})
+    assert not hardware_detector.lacks_usable_float16({})
+
+
+def test_the_worker_default_follows_the_same_rule() -> None:
+    """호스트가 computeType=null 을 보내는 '자동' 경로가 실제로 여기로 온다."""
+    from ksubmaker_worker import transcriber
+
+    assert transcriber._default_compute_type("cpu") == "int8"
+

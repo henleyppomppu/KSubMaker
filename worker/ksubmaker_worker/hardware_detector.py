@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from . import cuda_setup
 from .logging_setup import get_logger
@@ -387,3 +387,46 @@ def largest_free_vram_bytes(profile: dict[str, Any] | None = None) -> int:
         if isinstance(gpu, dict):
             best = max(best, _to_int(gpu.get("freeVramBytes")))
     return best
+
+
+#: GTX 10 시리즈와 그 세대의 TITAN/Quadro. 드라이버가 ``compute_cap`` 을 답하지 않을 때만 쓴다.
+#: "GTX 1660"/"GTX 1650" 은 Turing(7.5) 이라 여기 걸리면 안 되므로 앞자리가 아니라 시리즈
+#: 숫자를 통째로 본다.
+_PASCAL_NAME_MARKERS: Final = ("1030", "1050", "1060", "1070", "1080", "TITAN X", "TITAN XP")
+
+
+def lacks_usable_float16(profile: dict[str, Any] | None = None) -> bool:
+    """Whether the primary GPU would run a float16 model slower than it runs float32.
+
+    Pascal (compute capability 6.x) is the case this exists for: GP104/GP106 execute fp16
+    arithmetic at **1/64** of their fp32 rate, so a card with ample VRAM for a float16 model still
+    cannot execute one at a usable speed. A GTX 1060 was reported failing at 10% of a run and
+    working immediately once the compute type became int8.
+
+    Mirrors ``HardwareRecommendationPolicy.LacksUsableFloat16`` on the C# side. The host decides
+    what to *recommend*; this decides what an unspecified ``computeType`` actually becomes, which
+    is the path an "auto" user takes — the host sends null and never gets a say.
+
+    An unknown card reads as capable: recommending int8 needlessly costs a little accuracy, while
+    refusing float16 on hardware that has it would slow down every modern GPU.
+    """
+    data = profile if profile is not None else detect()
+    gpus = data.get("gpus") or []
+    if not gpus or not isinstance(gpus[0], dict):
+        return False
+
+    gpu = gpus[0]
+
+    capability = str(gpu.get("computeCapability") or "").strip()
+    if capability:
+        head = capability.split(".", 1)[0]
+        try:
+            # Maxwell(5.x) 는 fp16 경로 자체가 없고, Pascal(6.x) 은 있는데 fp32 보다 느리다.
+            # Volta(7.0) 부터 텐서 코어가 붙는다.
+            return int(head) <= 6
+        except ValueError:
+            pass
+
+    name = str(gpu.get("name") or "").upper()
+    return any(marker in name for marker in _PASCAL_NAME_MARKERS)
+

@@ -546,4 +546,84 @@ public sealed class HardwareRecommendationPolicyTests
 
         recommendation.Rationale.Should().Contain(12d.ToString("0.#", CultureInfo.CurrentCulture) + "GB");
     }
+
+    // -----------------------------------------------------------------------
+    // Pascal: enough VRAM for float16, not enough arithmetic
+    // -----------------------------------------------------------------------
+
+    private static HardwareProfile NamedGpu(string name, double vramGb, string? computeCapability) => new()
+    {
+        Gpus =
+        [
+            new GpuInfo
+            {
+                Name = name,
+                Index = 0,
+                TotalVramBytes = (long)(vramGb * 1024 * 1024 * 1024),
+                FreeVramBytes = (long)(vramGb * 1024 * 1024 * 1024),
+                ComputeCapability = computeCapability
+            }
+        ],
+        CudaAvailable = true,
+        CudaVersion = "12.4",
+        CpuName = "Test CPU",
+        LogicalCoreCount = 16,
+        TotalRamBytes = 32L * 1024 * 1024 * 1024
+    };
+
+    [Theory]
+    [InlineData("6.1")]   // Pascal — GTX 10 시리즈
+    [InlineData("5.2")]   // Maxwell — fp16 경로 자체가 없음
+    public void A_card_without_usable_float16_is_recommended_int8(string capability)
+    {
+        // A GTX 1060 reported failing to load the model at 10%; the same run worked the moment the
+        // compute type became int8. GP104/GP106 execute fp16 at 1/64 of their fp32 rate, so VRAM
+        // alone is the wrong thing to decide on.
+        var recommendation = HardwareRecommendationPolicy.Recommend(
+            NamedGpu("NVIDIA GeForce GTX 1060 6GB", 6d, capability), Catalog);
+
+        recommendation.ComputeType.Should().Be(ComputeType.Int8);
+        recommendation.Rationale.Should().Contain("float16", "사용자가 왜 int8인지 알아야 합니다");
+    }
+
+    [Theory]
+    [InlineData("7.5")]   // Turing
+    [InlineData("8.6")]   // Ampere
+    [InlineData("8.9")]   // Ada
+    public void A_modern_card_keeps_its_float16_recommendation(string capability)
+    {
+        var recommendation = HardwareRecommendationPolicy.Recommend(
+            NamedGpu("NVIDIA GeForce RTX 3080 Ti", 12d, capability), Catalog);
+
+        recommendation.ComputeType.Should().Be(ComputeType.Float16);
+        recommendation.Rationale.Should().NotContain("float16 연산이");
+    }
+
+    [Theory]
+    [InlineData("NVIDIA GeForce GTX 1080 Ti", true)]
+    [InlineData("NVIDIA GeForce GTX 1050 Ti", true)]
+    [InlineData("NVIDIA TITAN Xp", true)]
+    [InlineData("Quadro P4000", true)]
+    [InlineData("NVIDIA GeForce GTX 1660 SUPER", false)]   // Turing, 이름만 비슷
+    [InlineData("NVIDIA GeForce RTX 4090", false)]
+    public void The_name_decides_when_the_driver_does_not_report_a_capability(string name, bool pascal)
+    {
+        // Older drivers answer nothing for compute_cap, so the name is the only signal left. The
+        // GTX 16 series is the trap: Turing hardware whose name also begins with "GTX 1".
+        var gpu = new GpuInfo { Name = name, Index = 0, TotalVramBytes = 8L * 1024 * 1024 * 1024 };
+
+        HardwareRecommendationPolicy.LacksUsableFloat16(gpu).Should().Be(pascal);
+    }
+
+    [Fact]
+    public void An_unknown_card_is_assumed_capable()
+    {
+        // Refusing float16 on hardware that has it would slow down every card this list does not
+        // know about; recommending int8 unnecessarily only costs a little accuracy.
+        HardwareRecommendationPolicy.LacksUsableFloat16(
+            new GpuInfo { Name = "NVIDIA Something New", Index = 0, TotalVramBytes = 0 })
+            .Should().BeFalse();
+
+        HardwareRecommendationPolicy.LacksUsableFloat16(null).Should().BeFalse();
+    }
 }
