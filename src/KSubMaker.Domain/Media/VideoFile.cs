@@ -5,7 +5,20 @@ public static class VideoExtensions
 {
     public static readonly IReadOnlySet<string> Default = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".ts", ".mts", ".m2ts"
+        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".ts", ".mts", ".m2ts",
+
+        // 2026-09 사용자 신고: "재생은 되는데 KSubMaker 에서는 목록에 뜨지 않는다". 목록이
+        // 짧아서였다 — 아래는 번들한 ffmpeg 가 실제로 디먹스할 수 있는 것만 골랐고
+        // (`ffmpeg -demuxers` 로 확인), 읽지 못하는 컨테이너를 넣으면 목록에는 뜨고 처리에서
+        // 실패하므로 지금보다 나쁜 경험이 된다.
+        ".mpg", ".mpeg", ".mpe", ".m2v",   // MPEG-PS
+        ".vob",                            // DVD (MPEG-PS)
+        ".flv", ".f4v",                    // FLV
+        ".asf",                            // ASF (wmv 의 형제)
+        ".rm", ".rmvb",                    // RealMedia
+        ".3gp", ".3g2",                    // QuickTime 계열
+        ".ogv",                            // Ogg
+        ".divx", ".mkv3d"                  // AVI/Matroska 를 다른 이름으로 쓰는 것들
     };
 
     /// <summary>Sidecar subtitle formats recognised when deciding whether a video already has subtitles.</summary>
