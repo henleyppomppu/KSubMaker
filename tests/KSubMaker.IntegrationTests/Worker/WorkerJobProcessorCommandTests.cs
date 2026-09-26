@@ -517,4 +517,20 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
         command.Settings.Glossary.Should().HaveCount(2);
         command.Settings.Glossary["Sherlock"].Should().Be("셜록");
     }
+
+    [Fact]
+    public async Task A_subtitle_file_is_its_own_source_whatever_the_policy_says()
+    {
+        // 영상 없이 자막만 있는 폴더의 작업. 음성도 내장 트랙도 없으므로 고를 것이 없다.
+        var job = NewJob("ep1.ja.srt");
+        job.VideoPath = @"D:\subs\ep1.ja.srt";
+
+        var settings = new AppSettings { SubtitleSource = SubtitleSourcePreference.AudioOnly };
+
+        var (command, _) = await RunAsync(job, settings);
+
+        command.SourceMode.Should().Be(SourceModes.ExternalSubtitle);
+        command.SubtitlePath.Should().Be(@"D:\subs\ep1.ja.srt");
+        command.AudioTrackIndex.Should().BeNull();
+    }
 }

@@ -16,6 +16,12 @@ public sealed record ScanRequest
 
     /// <summary>Hard stop so a pathological tree cannot spin forever.</summary>
     public int MaxDepth { get; init; } = 64;
+
+    /// <summary>
+    /// Also pick up subtitle files that have no video beside them, so a folder of nothing but
+    /// subtitles can be translated on its own.
+    /// </summary>
+    public bool IncludeSubtitleOnlyFiles { get; init; } = true;
 }
 
 public sealed record ScanReport
@@ -111,11 +117,38 @@ public sealed class VideoScanService(IFileSystem fileSystem, ILogger<VideoScanSe
             // ---- files in this directory -----------------------------------
             try
             {
+                // The directory is read once and classified, because deciding whether a subtitle is
+                // an orphan needs to know every video name in the same folder.
+                var entries = new List<string>();
+                var videoStems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                 foreach (var file in _fileSystem.EnumerateFiles(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    entries.Add(file);
 
-                    if (!VideoExtensions.IsVideo(file, extensions))
+                    if (VideoExtensions.IsVideo(file, extensions))
+                    {
+                        videoStems.Add(Path.GetFileNameWithoutExtension(file));
+                    }
+                }
+
+                foreach (var file in entries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var isVideo = VideoExtensions.IsVideo(file, extensions);
+
+                    // A subtitle counts only when no video in this folder claims it. One that sits
+                    // next to its video is that video's source (or its output), not a job of its own.
+                    var isOrphanSubtitle =
+                        !isVideo
+                        && request.IncludeSubtitleOnlyFiles
+                        && ExternalSubtitleSelector.IsTranslatableSubtitle(file)
+                        && !videoStems.Contains(ExternalSubtitleSelector.BaseNameWithoutLanguageTag(file))
+                        && !videoStems.Contains(Path.GetFileNameWithoutExtension(file));
+
+                    if (!isVideo && !isOrphanSubtitle)
                     {
                         continue;
                     }

@@ -694,6 +694,18 @@ public sealed class WorkerJobProcessor : IJobProcessor
     /// </summary>
     private SourceSelection ResolveSource(Job job, AppSettings settings)
     {
+        // 작업 자체가 자막 파일이면(영상 없이 자막만 있는 폴더) 고를 것이 없다. 음성도 내장
+        // 트랙도 없으므로 정책과 무관하게 그 파일이 원본이다.
+        if (ExternalSubtitleSelector.IsTranslatableSubtitle(job.VideoPath))
+        {
+            return new SourceSelection(
+                SourceModes.ExternalSubtitle,
+                AudioTrackIndex: null,
+                SubtitleTrackIndex: null,
+                ResolveSubtitleLanguage(job.SelectedSubtitleLanguage, settings),
+                job.VideoPath);
+        }
+
         var wantsExternal = settings.SubtitleSource is SubtitleSourcePreference.PreferExternalFile
             or SubtitleSourcePreference.PreferAnySubtitle;
 

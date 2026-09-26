@@ -256,4 +256,27 @@ public sealed class OutputPathResolverTests
         first.Should().Contain("media1");
         second.Should().Contain("media2");
     }
+
+    [Theory]
+    [InlineData(@"D:\subs\ep1.ja.srt", @"D:\subs\ep1.ko.srt")]
+    [InlineData(@"D:\subs\ep1.srt", @"D:\subs\ep1.ko.srt")]
+    // 마지막 한 조각만 본다. sdh 는 언어가 아니므로 그대로 남고, 그래서 eng 도 남는다 —
+    // 결과가 장황해지지만 정보를 잃지는 않는다. 여러 꼬리를 걷어내려 들면 언젠가 제목의
+    // 일부를 먹는다.
+    [InlineData(@"D:\subs\ep1.eng.sdh.srt", @"D:\subs\ep1.eng.sdh.ko.srt")]
+    [InlineData(@"D:\subs\ep1.ass", @"D:\subs\ep1.ko.srt")]
+    public void A_subtitle_source_loses_its_language_tag_in_the_output_name(string source, string expected)
+    {
+        // movie.ja.srt 의 "확장자 없는 이름" 은 movie.ja 라서, 그대로 쓰면 movie.ja.ko.srt 가
+        // 나온다. 언어처럼 보이는 꼬리만 뗀다 — sdh 는 언어가 아니므로 eng 만 떨어진다.
+        OutputPathResolver.BuildDefaultPath(source).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_video_keeps_every_dot_in_its_name()
+    {
+        // 영상 이름의 점은 언어 태그가 아니다. 자막에만 적용되는 규칙이라는 것을 고정한다.
+        OutputPathResolver.BuildDefaultPath(@"D:\videos\S01.E02.mkv")
+            .Should().Be(@"D:\videos\S01.E02.ko.srt");
+    }
 }

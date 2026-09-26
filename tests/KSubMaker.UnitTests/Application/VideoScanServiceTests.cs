@@ -548,4 +548,71 @@ public sealed class VideoScanServiceTests
         resolution.Files.Should().BeEmpty();
         resolution.IgnoredPaths.Should().Be(2);
     }
+
+    // -----------------------------------------------------------------------
+    // 자막만 있는 폴더
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void A_folder_of_nothing_but_subtitles_produces_jobs()
+    {
+        // 신고: "폴더에 자막만 있을 경우 자막 번역만 해주면 좋겠습니다."
+        var fileSystem = new InMemoryFileSystem()
+            .AddDirectory("/subs")
+            .AddFile("/subs/ep1.ja.srt")
+            .AddFile("/subs/ep2.srt")
+            .AddFile("/subs/readme.txt");
+
+        var report = NewService(fileSystem).Scan(Request("/subs"));
+
+        report.Files.Select(f => f.FileName).Should().BeEquivalentTo("ep1.ja.srt", "ep2.srt");
+    }
+
+    [Fact]
+    public void A_subtitle_that_belongs_to_a_video_is_not_a_job_of_its_own()
+    {
+        // 영상 옆의 자막은 그 영상의 원본(또는 산출물)이지 별개 작업이 아니다. 별개로 잡으면
+        // 같은 내용이 두 번 처리되고 결과 이름까지 겹친다.
+        var fileSystem = new InMemoryFileSystem()
+            .AddDirectory("/videos")
+            .AddFile("/videos/movie.mkv")
+            .AddFile("/videos/movie.ja.srt")
+            .AddFile("/videos/movie.srt");
+
+        var report = NewService(fileSystem).Scan(Request("/videos"));
+
+        report.Files.Select(f => f.FileName).Should().BeEquivalentTo("movie.mkv");
+    }
+
+    [Fact]
+    public void A_korean_subtitle_is_never_picked_up_on_its_own()
+    {
+        // 이 파이프라인의 산출물이다. 잡으면 한국어를 한국어로 다시 번역한다.
+        var fileSystem = new InMemoryFileSystem()
+            .AddDirectory("/subs")
+            .AddFile("/subs/ep1.ko.srt");
+
+        NewService(fileSystem).Scan(Request("/subs")).Files.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("/subs/ep1.sub")]
+    [InlineData("/subs/ep1.idx")]
+    [InlineData("/subs/ep1.smi")]
+    public void Subtitle_formats_we_cannot_read_are_not_picked_up(string path)
+    {
+        var fileSystem = new InMemoryFileSystem().AddDirectory("/subs").AddFile(path);
+
+        NewService(fileSystem).Scan(Request("/subs")).Files.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_scan_can_be_told_to_ignore_orphan_subtitles()
+    {
+        var fileSystem = new InMemoryFileSystem().AddDirectory("/subs").AddFile("/subs/ep1.ja.srt");
+
+        var request = Request("/subs") with { IncludeSubtitleOnlyFiles = false };
+
+        NewService(fileSystem).Scan(request).Files.Should().BeEmpty();
+    }
 }

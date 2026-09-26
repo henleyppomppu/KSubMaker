@@ -641,10 +641,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         for (var i = 0; i < count; i++)
         {
-            if (results[i].Decision is EnqueueDecision.Created or EnqueueDecision.Requeued)
+            if (results[i].Decision is not (EnqueueDecision.Created or EnqueueDecision.Requeued))
             {
-                toProbe.Add(files[i]);
+                continue;
             }
+
+            // ffprobe 를 자막 파일에 걸면 오디오 스트림이 없으니 VIDEO_UNREADABLE 로 실패하고,
+            // 작업이 시작도 하기 전에 빨갛게 된다. 잴 길이도 트랙도 없다.
+            if (ExternalSubtitleSelector.IsTranslatableSubtitle(files[i].FullPath))
+            {
+                continue;
+            }
+
+            toProbe.Add(files[i]);
         }
 
         if (toProbe.Count == 0)
