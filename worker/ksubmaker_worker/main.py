@@ -446,6 +446,35 @@ def _install_signal_handlers(worker: Worker) -> None:
             _log.debug("could not install a handler for %s: %r", name, exc)
 
 
+#: Native-extension packages imported up front, in this order. numpy first: ctranslate2 imports it.
+PRELOADED_MODULES: tuple[str, ...] = ("numpy", "ctranslate2", "faster_whisper")
+
+
+def preload_native_modules() -> list[str]:
+    """Import the heavy native packages on the main thread, before any command is read.
+
+    Observed on a user machine (2026-11-02): a job thread wedged for 10+ minutes inside
+    ``LoadLibraryExW`` for ``numpy/_core/_multiarray_umath.pyd`` — reached via
+    ``transcriber._resolve_device`` → ``import ctranslate2`` — while the prefetch lane was starting
+    ffmpeg on another thread and the main thread sat in a blocking ``ReadFile`` on stdin. No
+    progress event, no exit; the host's idle watchdog only fires after 15 minutes. The lazy imports
+    existed to keep startup cheap, but together they cost ~0.15s; doing them here means no DLL is
+    ever mapped while other threads are creating processes or holding the loader.
+
+    A failure is logged and ignored: the lazy import at the point of use still raises the real,
+    user-facing error (missing package, missing CUDA DLL) exactly as before.
+    """
+    loaded: list[str] = []
+    for name in PRELOADED_MODULES:
+        try:
+            __import__(name)
+            loaded.append(name)
+        except Exception as exc:  # noqa: BLE001 - diagnostics only; see docstring
+            _log.warning("preloading %s failed; it will be imported on first use: %r", name, exc)
+    _log.info("preloaded native modules: %s", ", ".join(loaded) or "-")
+    return loaded
+
+
 def main(argv: list[str] | None = None) -> int:
     """Process entry point. Returns the exit code.
 
@@ -471,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
             "(scripts/build-worker.ps1).",
             ", ".join(report.missing),
         )
+
+    preload_native_modules()
 
     args = list(argv if argv is not None else sys.argv[1:])
     if "--version" in args:
