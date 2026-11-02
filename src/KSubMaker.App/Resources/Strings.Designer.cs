@@ -364,6 +364,18 @@ public static partial class Strings
     /// <summary>건너뜀</summary>
     public static string JobStatusSkipped => Get(nameof(JobStatusSkipped));
 
+    /// <summary> · 목록에서 뺌 {0}건</summary>
+    public static string EnqueueSummaryRemovedFormat => Get(nameof(EnqueueSummaryRemovedFormat));
+
+    /// <summary>다른 폴더에서 진행하던 작업 {0}건이 목록에서 빠지고 이어하기 정보도 지워집니다. 계속할까요?</summary>
+    public static string FolderChangeDropsUnfinishedFormat => Get(nameof(FolderChangeDropsUnfinishedFormat));
+
+    /// <summary>작업이 진행 중이라 폴더를 바꿀 수 없습니다. 중단하거나 작업이 끝난 뒤에 바꿔 주세요.</summary>
+    public static string FolderChangeBlockedWhileBusy => Get(nameof(FolderChangeBlockedWhileBusy));
+
+    /// <summary>폴더 변경을 취소했습니다. 목록은 그대로입니다.</summary>
+    public static string FolderChangeCancelledMessage => Get(nameof(FolderChangeCancelledMessage));
+
     /// <summary>일시정지</summary>
     public static string JobStatusPaused => Get(nameof(JobStatusPaused));
 

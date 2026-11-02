@@ -110,6 +110,7 @@
 
                     <TextBox Grid.Column="1"
                              Text="{Binding TargetFolder, UpdateSourceTrigger=PropertyChanged}"
+                             IsEnabled="{Binding CanEditFolder}"
                              Padding="6,5"
                              VerticalContentAlignment="Center"
                              ToolTip="{Binding TargetFolder}" />

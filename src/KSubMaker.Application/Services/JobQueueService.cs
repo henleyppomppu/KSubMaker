@@ -246,13 +246,16 @@ public sealed class JobQueueService : IAsyncDisposable
 
                 switch (result.Decision)
                 {
-                    case EnqueueDecision.Created or EnqueueDecision.AlreadyDone when result.Job is not null:
+                    // AlreadyDone covers both a brand-new file and a queued job that a rescan has just
+                    // flipped to 완료; the latter is already a row and must be updated, not inserted.
+                    case EnqueueDecision.Created or EnqueueDecision.AlreadyDone
+                        when result.Job is not null && !_jobs.ContainsKey(result.Job.Id):
                         result.Job.QueueOrder = order++;
                         _jobs[result.Job.Id] = result.Job;
                         toAdd.Add(result.Job);
                         break;
 
-                    case EnqueueDecision.Requeued when result.Job is not null:
+                    case EnqueueDecision.Requeued or EnqueueDecision.AlreadyDone when result.Job is not null:
                         toUpdate.Add(result.Job);
                         break;
                 }
