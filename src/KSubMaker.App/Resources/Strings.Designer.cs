@@ -172,12 +172,6 @@ public static partial class Strings
     /// <summary>모델 관리</summary>
     public static string ModelsButton => Get(nameof(ModelsButton));
 
-    /// <summary>전체 선택</summary>
-    public static string SelectAllButton => Get(nameof(SelectAllButton));
-
-    /// <summary>선택 해제</summary>
-    public static string ClearSelectionButton => Get(nameof(ClearSelectionButton));
-
     /// <summary>선택</summary>
     public static string ColumnSelected => Get(nameof(ColumnSelected));
 
@@ -363,6 +357,9 @@ public static partial class Strings
 
     /// <summary>건너뜀</summary>
     public static string JobStatusSkipped => Get(nameof(JobStatusSkipped));
+
+    /// <summary>전체</summary>
+    public static string SelectAllHeader => Get(nameof(SelectAllHeader));
 
     /// <summary> · 목록에서 뺌 {0}건</summary>
     public static string EnqueueSummaryRemovedFormat => Get(nameof(EnqueueSummaryRemovedFormat));
