@@ -1300,4 +1300,55 @@ public static partial class Strings
 
     /// <summary>폴더</summary>
     public static string FolderTreeHeader => Get(nameof(FolderTreeHeader));
+
+    /// <summary>재생목록</summary>
+    public static string PlaylistsHeader => Get(nameof(PlaylistsHeader));
+
+    /// <summary>새로 만들기</summary>
+    public static string NewPlaylistButton => Get(nameof(NewPlaylistButton));
+
+    /// <summary>이름 바꾸기</summary>
+    public static string RenamePlaylistButton => Get(nameof(RenamePlaylistButton));
+
+    /// <summary>삭제</summary>
+    public static string DeletePlaylistButton => Get(nameof(DeletePlaylistButton));
+
+    /// <summary>'{0}' 재생목록을 지울까요? 안에 있던 작업과 자막은 그대로 남습니다.</summary>
+    public static string DeletePlaylistConfirmFormat => Get(nameof(DeletePlaylistConfirmFormat));
+
+    /// <summary>재생목록 이름</summary>
+    public static string PlaylistNameDialogTitle => Get(nameof(PlaylistNameDialogTitle));
+
+    /// <summary>재생목록 이름을 입력하세요.</summary>
+    public static string PlaylistNameDialogMessage => Get(nameof(PlaylistNameDialogMessage));
+
+    /// <summary>'{0}' 재생목록이 이미 있습니다. 다른 이름을 입력하세요.</summary>
+    public static string PlaylistNameTakenFormat => Get(nameof(PlaylistNameTakenFormat));
+
+    /// <summary>재생목록에 넣기</summary>
+    public static string AddToPlaylistMenuItem => Get(nameof(AddToPlaylistMenuItem));
+
+    /// <summary>새 재생목록에 넣기…</summary>
+    public static string AddToNewPlaylistMenuItem => Get(nameof(AddToNewPlaylistMenuItem));
+
+    /// <summary>'{0}' 재생목록에 {1}건을 넣었습니다.</summary>
+    public static string AddedToPlaylistFormat => Get(nameof(AddedToPlaylistFormat));
+
+    /// <summary> (이미 들어 있던 {0}건은 그대로)</summary>
+    public static string AlreadyInPlaylistFormat => Get(nameof(AlreadyInPlaylistFormat));
+
+    /// <summary>재생목록에서 빼기</summary>
+    public static string RemoveFromPlaylistButton => Get(nameof(RemoveFromPlaylistButton));
+
+    /// <summary>{0}건을 이 재생목록에서 뺄까요? 작업과 자막은 원래 폴더에 그대로 남습니다.</summary>
+    public static string RemoveFromPlaylistConfirmFormat => Get(nameof(RemoveFromPlaylistConfirmFormat));
+
+    /// <summary>재생목록에서 {0}건을 뺐습니다.</summary>
+    public static string RemovedFromPlaylistFormat => Get(nameof(RemovedFromPlaylistFormat));
+
+    /// <summary>폴더 · {0}</summary>
+    public static string ViewTitleFolderFormat => Get(nameof(ViewTitleFolderFormat));
+
+    /// <summary>재생목록 · {0}</summary>
+    public static string ViewTitlePlaylistFormat => Get(nameof(ViewTitlePlaylistFormat));
 }

@@ -245,7 +245,7 @@
                             <Button Content="{x:Static res:Strings.CancelJobButton}"
                                     Command="{Binding CancelJobsCommand}"
                                     Style="{StaticResource ToolButton}" />
-                            <Button Content="{x:Static res:Strings.RemoveSelectedButton}"
+                            <Button Content="{Binding RemoveSelectedCaption}"
                                     Command="{Binding RemoveSelectedCommand}"
                                     Style="{StaticResource ToolButton}" />
                             <Button Content="{x:Static res:Strings.RemoveCompletedButton}"
@@ -294,7 +294,14 @@
                 <ColumnDefinition Width="*" MinWidth="400" />
             </Grid.ColumnDefinitions>
 
-            <DockPanel Grid.Column="0" Background="{StaticResource ChromeBackground}">
+            <Grid Grid.Column="0" Background="{StaticResource ChromeBackground}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="120" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="220" MinHeight="90" />
+                </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0">
                 <TextBlock DockPanel.Dock="Top"
                            Text="{x:Static res:Strings.FolderTreeHeader}"
                            FontWeight="SemiBold"
@@ -319,14 +326,69 @@
                 </TreeView>
             </DockPanel>
 
+            <GridSplitter Grid.Row="1"
+                          Height="5"
+                          HorizontalAlignment="Stretch"
+                          ResizeBehavior="PreviousAndNext"
+                          Background="{StaticResource ChromeBorder}" />
+
+            <!-- 재생목록: buckets of jobs from any folders; picking one shows it in the grid -->
+            <DockPanel Grid.Row="2">
+                <DockPanel DockPanel.Dock="Top" Margin="10,6,6,4">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="{x:Static res:Strings.NewPlaylistButton}"
+                                Command="{Binding NewPlaylistCommand}"
+                                Style="{StaticResource ToolButton}" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Static res:Strings.PlaylistsHeader}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+
+                <ListBox ItemsSource="{Binding Playlists}"
+                         SelectedItem="{Binding SelectedPlaylist, Mode=TwoWay}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{x:Static res:Strings.RenamePlaylistButton}"
+                                      Command="{Binding PlacementTarget.DataContext.RenamePlaylistCommand,
+                                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="{x:Static res:Strings.DeletePlaylistButton}"
+                                      Command="{Binding PlacementTarget.DataContext.DeletePlaylistCommand,
+                                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="2,1">
+                                <TextBlock DockPanel.Dock="Right"
+                                           Text="{Binding Count}"
+                                           Foreground="Gray"
+                                           Margin="8,0,0,0" />
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            </Grid>
+
             <GridSplitter Grid.Column="1"
                           Width="5"
                           HorizontalAlignment="Stretch"
                           ResizeBehavior="PreviousAndNext"
                           Background="{StaticResource ChromeBorder}" />
 
-        <controls:JobGrid Grid.Column="2"
-                  ItemsSource="{Binding Jobs}"
+        <DockPanel Grid.Column="2">
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding ViewTitle}"
+                   FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip="{Binding ViewTitle}"
+                   Margin="10,6,10,4" />
+        <controls:JobGrid ItemsSource="{Binding Jobs}"
                   SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                   AllowDrop="True"
                   DragOver="OnQueueDragOver"
@@ -401,7 +463,25 @@
                               Command="{Binding PlacementTarget.DataContext.ShowFilePropertiesCommand,
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <Separator />
-                    <MenuItem Header="{x:Static res:Strings.RemoveSelectedButton}"
+                    <MenuItem Header="{x:Static res:Strings.AddToPlaylistMenuItem}"
+                              ItemsSource="{Binding PlacementTarget.DataContext.Playlists,
+                                                    RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding Name}" />
+                                <Setter Property="Command"
+                                        Value="{Binding PlacementTarget.DataContext.AddToPlaylistCommand,
+                                                        RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Setter Property="CommandParameter" Value="{Binding}" />
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                    <MenuItem Header="{x:Static res:Strings.AddToNewPlaylistMenuItem}"
+                              Command="{Binding PlacementTarget.DataContext.AddToNewPlaylistCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <Separator />
+                    <MenuItem Header="{Binding PlacementTarget.DataContext.RemoveSelectedCaption,
+                                               RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                               Command="{Binding PlacementTarget.DataContext.RemoveSelectedCommand,
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                 </ContextMenu>
@@ -647,6 +727,7 @@
 
             </DataGrid.Columns>
         </controls:JobGrid>
+        </DockPanel>
         </Grid>
 
     </DockPanel>

@@ -101,6 +101,29 @@ public sealed class FolderScopedRunTests
         elsewhere.Status.Should().Be(JobStatus.Pending, "전체 실행 runs the folder on screen, not every folder ever opened");
     }
 
+    [Fact]
+    public async Task A_run_scoped_to_a_playlist_runs_its_jobs_from_every_folder_and_nothing_else()
+    {
+        var first = NewJob("a", "/lectures/2021", 0);
+        var outside = NewJob("b", "/lectures/2021", 1);
+        var second = NewJob("c", "/lectures/2022", 2);
+        var processor = new ScriptedJobProcessor();
+        var queue = NewQueue(new InMemoryJobRepository(first, outside, second), processor);
+        await queue.LoadAsync();
+
+        var playlists = new PlaylistService(new InMemoryPlaylistRepository());
+        var bucket = await playlists.CreateAsync("재처리");
+        await playlists.AddAsync(bucket.Id, [first.Id, second.Id]);
+
+        await queue.StartAsync(Settings(), scope: job => playlists.Contains(bucket.Id, job.Id));
+        await WaitForIdleAsync(queue);
+
+        processor.Calls.Should().Be(2);
+        first.Status.Should().Be(JobStatus.Completed);
+        second.Status.Should().Be(JobStatus.Completed);
+        outside.Status.Should().Be(JobStatus.Pending);
+    }
+
     /// <summary>
     /// 목록 새로고침 while the queue runs: the waiting job whose subtitle has appeared is marked 완료
     /// and never handed to the processor; the running one is left alone.

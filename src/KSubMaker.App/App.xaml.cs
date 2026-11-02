@@ -279,6 +279,9 @@ public partial class App : System.Windows.Application
         var queue = services.GetRequiredService<JobQueueService>();
         await queue.LoadAsync().ConfigureAwait(true);
 
+        // After the queue: a playlist's entries refer to jobs.
+        await services.GetRequiredService<PlaylistService>().LoadAsync().ConfigureAwait(true);
+
         // After LoadAsync so the "known job" set is complete; a sweep against an empty queue would
         // delete the checkpoints of every job waiting to be resumed.
         StartOrphanedCacheCleanup(queue);

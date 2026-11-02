@@ -215,6 +215,45 @@ namespace KSubMaker.Infrastructure.Persistence.Migrations
                     b.ToTable("Models", (string)null);
                 });
 
+            modelBuilder.Entity("KSubMaker.Domain.Playlists.Playlist", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Playlists", (string)null);
+                });
+
+            modelBuilder.Entity("KSubMaker.Domain.Playlists.PlaylistEntry", b =>
+                {
+                    b.Property<string>("PlaylistId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JobId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AddedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PlaylistId", "JobId");
+
+                    b.HasIndex("JobId");
+
+                    b.ToTable("PlaylistEntries", (string)null);
+                });
+
             modelBuilder.Entity("KSubMaker.Infrastructure.Persistence.SettingRecord", b =>
                 {
                     b.Property<string>("Key")
@@ -228,6 +267,21 @@ namespace KSubMaker.Infrastructure.Persistence.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("AppSettings", (string)null);
+                });
+
+            modelBuilder.Entity("KSubMaker.Domain.Playlists.PlaylistEntry", b =>
+                {
+                    b.HasOne("KSubMaker.Domain.Jobs.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("KSubMaker.Domain.Playlists.Playlist", null)
+                        .WithMany()
+                        .HasForeignKey("PlaylistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

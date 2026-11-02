@@ -1,5 +1,6 @@
 using KSubMaker.Domain.Jobs;
 using KSubMaker.Domain.Models;
+using KSubMaker.Domain.Playlists;
 using KSubMaker.Domain.Settings;
 
 namespace KSubMaker.Application.Abstractions;
@@ -31,6 +32,24 @@ public interface IJobRepository
     /// rather than appearing to still be running.
     /// </summary>
     Task<int> ResetOrphanedActiveJobsAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IPlaylistRepository
+{
+    Task<IReadOnlyList<Playlist>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<PlaylistEntry>> GetEntriesAsync(CancellationToken cancellationToken = default);
+
+    Task AddAsync(Playlist playlist, CancellationToken cancellationToken = default);
+
+    Task RenameAsync(string id, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the playlist and its entries. The jobs themselves are untouched.</summary>
+    Task RemoveAsync(string id, CancellationToken cancellationToken = default);
+
+    Task AddEntriesAsync(IReadOnlyList<PlaylistEntry> entries, CancellationToken cancellationToken = default);
+
+    Task RemoveEntriesAsync(string playlistId, IReadOnlyList<string> jobIds, CancellationToken cancellationToken = default);
 }
 
 public interface ISettingsRepository

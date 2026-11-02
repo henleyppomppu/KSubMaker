@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly SettingsService _settingsService;
     private readonly VideoScanService _scanService;
     private readonly JobQueueService _queue;
+    private readonly PlaylistService _playlists;
     private readonly HardwareService _hardwareService;
     private readonly IModelManager _models;
     private readonly ModelCatalog _catalog;
@@ -81,6 +82,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SettingsService settingsService,
         VideoScanService scanService,
         JobQueueService queue,
+        PlaylistService playlists,
         HardwareService hardwareService,
         IModelManager models,
         ModelCatalog catalog,
@@ -95,6 +97,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settingsService = settingsService;
         _scanService = scanService;
         _queue = queue;
+        _playlists = playlists;
         _hardwareService = hardwareService;
         _models = models;
         _catalog = catalog;
@@ -385,6 +388,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _queue.QueueDrained += OnQueueDrained;
             _settingsService.SettingsChanged += OnSettingsChanged;
             _hardwareService.ProfileChanged += OnHardwareProfileChanged;
+            _playlists.Changed += OnPlaylistsChanged;
             _subscribed = true;
         }
 
@@ -395,6 +399,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         QueueStatus = _queue.State;
         StatusMessage = Strings.ReadyMessage;
 
+        SyncPlaylists();
+        OnViewChanged();
         _ = InitializeFolderTreeAsync();
 
         try
@@ -465,6 +471,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _queue.QueueDrained -= OnQueueDrained;
         _settingsService.SettingsChanged -= OnSettingsChanged;
         _hardwareService.ProfileChanged -= OnHardwareProfileChanged;
+        _playlists.Changed -= OnPlaylistsChanged;
     }
 
     // -----------------------------------------------------------------------
@@ -515,10 +522,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         TargetFolder = folder;
+        ShowFolder(folder);
 
         if (IsDriveRoot(folder))
         {
-            ShowFolder(folder);
             StatusMessage = Strings.DriveRootNotScannedMessage;
             return;
         }
@@ -536,12 +543,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Switches the grid to <paramref name="folder"/> and points the tree at it.</summary>
     private void ShowFolder(string folder)
     {
-        if (QueueListReconciler.IsSameFolder(folder, _listFolder))
+        if (_viewPlaylistId is null && QueueListReconciler.IsSameFolder(folder, _listFolder))
         {
             return;
         }
 
+        _viewPlaylistId = null;
+        SelectedPlaylist = null;
         _listFolder = folder;
+        OnViewChanged();
         ApplyView();
         _ = FolderTree.RevealAsync(folder);
     }
@@ -568,6 +578,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync()
     {
+        if (_viewPlaylistId is { } playlistId)
+        {
+            await RunBusyAsync(token => RefreshPlaylistAsync(playlistId, token)).ConfigureAwait(true);
+            return;
+        }
+
         var folder = TargetFolder.Trim();
 
         if (string.IsNullOrWhiteSpace(folder))
@@ -653,6 +669,42 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Runs <paramref name="work"/> with the same busy state, cancellation and error reporting a
+    /// folder scan has, for scans that are not of one folder (a playlist refresh).
+    /// </summary>
+    private async Task RunBusyAsync(Func<CancellationToken, Task> work)
+    {
+        var cts = new CancellationTokenSource();
+        Interlocked.Exchange(ref _scanCts, cts)?.Dispose();
+        var finished = new TaskCompletionSource();
+        _scanFinished = finished.Task;
+        IsScanning = true;
+
+        try
+        {
+            await work(cts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Strings.ScanCancelledMessage;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "재생목록을 새로 고치는 중 오류가 발생했습니다.");
+            var message = string.Format(CultureInfo.CurrentCulture, Strings.ScanFailedFormat, ex.Message);
+            StatusMessage = message;
+            _dialogs.ShowError(message);
+        }
+        finally
+        {
+            IsScanning = false;
+            Interlocked.CompareExchange(ref _scanCts, null, cts);
+            cts.Dispose();
+            finished.TrySetResult();
+        }
+    }
+
+    /// <summary>
     /// Entry point for files and folders dropped onto the queue grid. Same pipeline as a scan —
     /// resolve → enqueue → probe → summary — and the same guards, so a drop can do nothing a scan
     /// could not.
@@ -708,11 +760,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             ShowEnqueueSummary(results);
 
-            // Dropped files from another folder are queued but belong to that folder's view.
-            var hidden = results.Count(r => r.Job is { } job && !IsVisible(job));
-            if (hidden > 0)
+            if (_viewPlaylistId is not null)
             {
-                StatusMessage += string.Format(CultureInfo.CurrentCulture, Strings.DropHiddenElsewhereFormat, hidden);
+                await AddDroppedToPlaylistAsync(results).ConfigureAwait(true);
+            }
+            else
+            {
+                // Dropped files from another folder are queued but belong to that folder's view.
+                var hidden = results.Count(r => r.Job is { } job && !IsVisible(job));
+                if (hidden > 0)
+                {
+                    StatusMessage += string.Format(CultureInfo.CurrentCulture, Strings.DropHiddenElsewhereFormat, hidden);
+                }
             }
 
             await AskPerFileIfRequestedAsync(settings, cts.Token).ConfigureAwait(true);
@@ -988,13 +1047,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             restrict = anyChecked ? selection.Ids : null;
         }
 
-        // 전체 실행 means the folder on screen, not every folder ever opened. A predicate, so a file a
-        // refresh adds to this folder mid-run still gets its turn.
+        // 전체 실행 means what is on screen — this folder, or this playlist — not every folder ever
+        // opened. A predicate, so a file a refresh (or the user) adds to it mid-run still gets its turn.
         var folder = _listFolder;
         var includeSubfolders = IncludeSubfolders;
-        Func<Job, bool>? scope = folder is null
-            ? null
-            : job => QueueListReconciler.IsInFolder(job.VideoPath, folder, includeSubfolders);
+        var playlists = _playlists;
+        Func<Job, bool>? scope = _viewPlaylistId is { } playlistId
+            ? job => playlists.Contains(playlistId, job.Id)
+            : folder is null
+                ? null
+                : job => QueueListReconciler.IsInFolder(job.VideoPath, folder, includeSubfolders);
 
         _settings = _settingsService.Current;
 
@@ -1302,6 +1364,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (await TryRemoveFromPlaylistAsync(completed, confirm: true).ConfigureAwait(true))
+        {
+            return;
+        }
+
         if (!_dialogs.Confirm(Strings.RemoveCompletedConfirm))
         {
             return;
@@ -1330,6 +1397,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         var selection = Resolve(JobAction.Remove);
         if (!Accept(selection, JobAction.Remove))
+        {
+            return;
+        }
+
+        if (await TryRemoveFromPlaylistAsync(selection.Ids, confirm: true).ConfigureAwait(true))
         {
             return;
         }
@@ -2229,7 +2301,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether <paramref name="job"/> belongs on screen in the current view.</summary>
     private bool IsVisible(Job job) =>
-        _listFolder is null || QueueListReconciler.IsInFolder(job.VideoPath, _listFolder, IncludeSubfolders);
+        _viewPlaylistId is { } playlistId
+            ? _playlists.Contains(playlistId, job.Id)
+            : _listFolder is null || QueueListReconciler.IsInFolder(job.VideoPath, _listFolder, IncludeSubfolders);
 
     /// <summary>
     /// Puts the current view's rows on screen, in queue order. Rows leaving the screen are unchecked:
@@ -2550,6 +2624,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         var removed = new HashSet<string>(ids, StringComparer.Ordinal);
+
+        // The database has dropped their playlist entries by cascade; memory follows.
+        _playlists.ForgetJobs(removed);
 
         BatchSelectionChange(() =>
         {

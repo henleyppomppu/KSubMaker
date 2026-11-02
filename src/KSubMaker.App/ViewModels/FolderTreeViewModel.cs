@@ -16,6 +16,7 @@ namespace KSubMaker.App.ViewModels;
 public sealed class FolderTreeViewModel
 {
     private bool _revealing;
+    private FolderNodeViewModel? _selected;
 
     public ObservableCollection<FolderNodeViewModel> Roots { get; } = [];
 
@@ -88,8 +89,22 @@ public sealed class FolderTreeViewModel
         }
     }
 
+    /// <summary>
+    /// Deselects the current folder (a playlist is now on screen), so picking that same folder
+    /// again is a selection change and switches back.
+    /// </summary>
+    public void ClearSelection()
+    {
+        if (_selected is { } node)
+        {
+            _selected = null;
+            node.IsSelected = false;
+        }
+    }
+
     internal void OnNodeSelected(FolderNodeViewModel node)
     {
+        _selected = node;
         if (!_revealing)
         {
             FolderSelected?.Invoke(this, node.FullPath);

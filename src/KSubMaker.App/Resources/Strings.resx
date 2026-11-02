@@ -1343,4 +1343,55 @@
   <data name="FolderTreeHeader" xml:space="preserve">
     <value>폴더</value>
   </data>
+  <data name="PlaylistsHeader" xml:space="preserve">
+    <value>재생목록</value>
+  </data>
+  <data name="NewPlaylistButton" xml:space="preserve">
+    <value>새로 만들기</value>
+  </data>
+  <data name="RenamePlaylistButton" xml:space="preserve">
+    <value>이름 바꾸기</value>
+  </data>
+  <data name="DeletePlaylistButton" xml:space="preserve">
+    <value>삭제</value>
+  </data>
+  <data name="DeletePlaylistConfirmFormat" xml:space="preserve">
+    <value>'{0}' 재생목록을 지울까요? 안에 있던 작업과 자막은 그대로 남습니다.</value>
+  </data>
+  <data name="PlaylistNameDialogTitle" xml:space="preserve">
+    <value>재생목록 이름</value>
+  </data>
+  <data name="PlaylistNameDialogMessage" xml:space="preserve">
+    <value>재생목록 이름을 입력하세요.</value>
+  </data>
+  <data name="PlaylistNameTakenFormat" xml:space="preserve">
+    <value>'{0}' 재생목록이 이미 있습니다. 다른 이름을 입력하세요.</value>
+  </data>
+  <data name="AddToPlaylistMenuItem" xml:space="preserve">
+    <value>재생목록에 넣기</value>
+  </data>
+  <data name="AddToNewPlaylistMenuItem" xml:space="preserve">
+    <value>새 재생목록에 넣기…</value>
+  </data>
+  <data name="AddedToPlaylistFormat" xml:space="preserve">
+    <value>'{0}' 재생목록에 {1}건을 넣었습니다.</value>
+  </data>
+  <data name="AlreadyInPlaylistFormat" xml:space="preserve">
+    <value> (이미 들어 있던 {0}건은 그대로)</value>
+  </data>
+  <data name="RemoveFromPlaylistButton" xml:space="preserve">
+    <value>재생목록에서 빼기</value>
+  </data>
+  <data name="RemoveFromPlaylistConfirmFormat" xml:space="preserve">
+    <value>{0}건을 이 재생목록에서 뺄까요? 작업과 자막은 원래 폴더에 그대로 남습니다.</value>
+  </data>
+  <data name="RemovedFromPlaylistFormat" xml:space="preserve">
+    <value>재생목록에서 {0}건을 뺐습니다.</value>
+  </data>
+  <data name="ViewTitleFolderFormat" xml:space="preserve">
+    <value>폴더 · {0}</value>
+  </data>
+  <data name="ViewTitlePlaylistFormat" xml:space="preserve">
+    <value>재생목록 · {0}</value>
+  </data>
 </root>
