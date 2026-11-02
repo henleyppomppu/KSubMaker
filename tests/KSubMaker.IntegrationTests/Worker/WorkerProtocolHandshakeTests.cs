@@ -279,6 +279,60 @@ public sealed class WorkerProtocolHandshakeTests : IDisposable
     // resilience
     // -----------------------------------------------------------------------
 
+    /// <summary>
+    /// The queue retries a recoverable failure the instant it is reported. When the watchdog is the
+    /// reporter, the worker it has just killed may not have exited yet — and StartAsync used to hand
+    /// that dying instance to the retry, whose job was then failed in 0.0s by the old exit event.
+    /// </summary>
+    [RequiresPythonFact]
+    public async Task A_start_requested_as_the_watchdog_fires_gets_a_fresh_worker()
+    {
+        var locator = new StubToolLocator(
+            StubScript,
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["KSUBMAKER_STUB_HANG_PROCESS"] = "1" },
+            _workspace.Root);
+
+        await using var client = new WorkerProcessClient(
+            locator,
+            Paths,
+            Options.Create(new WorkerOptions
+            {
+                StartupTimeout = TimeSpan.FromSeconds(30),
+                ShutdownTimeout = TimeSpan.FromSeconds(10),
+                IdleTimeout = TimeSpan.FromSeconds(1), // the poll interval clamps to 5s
+                TerminateOnIdleTimeout = true,
+                HostVersion = "integration-test"
+            }),
+            NullLogger<WorkerProcessClient>.Instance);
+
+        var original = await client.StartAsync().WaitAsync(Timeout);
+
+        var restart = new TaskCompletionSource<Task<ReadyEvent>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.EventReceived += (_, e) =>
+        {
+            // Exactly what the queue's auto-retry does: react to the synthesised error by starting.
+            if (e is ErrorEvent { Code: "WORKER_CRASHED" })
+            {
+                restart.TrySetResult(client.StartAsync());
+            }
+        };
+
+        await client.SendAsync(new ProcessCommand
+        {
+            JobId = "job-hang",
+            VideoPath = "/videos/a.mkv",
+            OutputPath = "/videos/a.ko.srt",
+            CheckpointDir = "/cache/job-hang",
+            Settings = new WorkerJobSettings()
+        }).WaitAsync(Timeout);
+
+        var restarted = await (await restart.Task.WaitAsync(Timeout)).WaitAsync(Timeout);
+
+        restarted.Should().NotBeSameAs(original, "the condemned instance must never be reused");
+
+        await client.StopAsync(TimeSpan.FromSeconds(10)).WaitAsync(Timeout);
+    }
+
     [RequiresPythonFact]
     public async Task Garbage_on_stdout_never_reaches_a_subscriber_and_never_breaks_the_channel()
     {

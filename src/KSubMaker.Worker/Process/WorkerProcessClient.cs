@@ -77,6 +77,15 @@ public sealed class WorkerProcessClient : IWorkerClient
     private string? _inFlightJobId;
     private int _stopRequested;
     private int _exitRaised;
+
+    /// <summary>
+    /// Set when the watchdog has decided this worker instance must die. <c>Process.Kill</c> returns
+    /// before the process is gone, so for a moment <c>HasExited</c> is still false. Without this flag
+    /// the queue's automatic retry — which starts the instant the watchdog reports the failure —
+    /// called <see cref="StartAsync"/>, got the dying instance back, subscribed to it, and was then
+    /// failed in 0.0s by that instance's own exit event (2026-11-02, a 7-minute lecture).
+    /// </summary>
+    private int _condemned;
     private volatile bool _disposed;
 
     public WorkerProcessClient(
@@ -142,10 +151,14 @@ public sealed class WorkerProcessClient : IWorkerClient
         await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_process is not null && _ready is not null && !HasExitedSafe(_process))
+            if (_process is not null && _ready is not null && !HasExitedSafe(_process)
+                && Volatile.Read(ref _condemned) == 0)
             {
                 return _ready;
             }
+
+            // A condemned instance falls through to CleanupAsync, which kills it, waits for its pumps
+            // and raises its Exited event now — before the caller has subscribed to anything.
 
             // A previous worker crashed (or the watchdog killed it). Tear the corpse down first so a
             // restart cannot leak handles or leave a stale reader task attached.
@@ -171,6 +184,7 @@ public sealed class WorkerProcessClient : IWorkerClient
     {
         Volatile.Write(ref _stopRequested, 0);
         Volatile.Write(ref _exitRaised, 0);
+        Volatile.Write(ref _condemned, 0);
         Volatile.Write(ref _inFlightJobId, null);
 
         var launch = DescribeLaunch();
@@ -616,6 +630,13 @@ public sealed class WorkerProcessClient : IWorkerClient
         var message = $"장시간 응답 없음: {duration} 동안 아무 진행 상황도 보고되지 않았습니다.";
 
         _logger.LogWarning("{Message} (작업 {JobId})", message, jobId ?? "-");
+
+        if (_options.TerminateOnIdleTimeout)
+        {
+            // Before anyone hears about the failure: the synthesised error below is what triggers
+            // the retry, and the retry must not be handed this instance.
+            Volatile.Write(ref _condemned, 1);
+        }
 
         FaultPending(new WorkerTimeoutException(message));
 

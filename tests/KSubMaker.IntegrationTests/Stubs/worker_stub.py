@@ -143,6 +143,10 @@ def main() -> int:
                 }
             )
 
+        elif command == "process" and os.environ.get("KSUBMAKER_STUB_HANG_PROCESS"):
+            # A job that never reports again — what a wedged native call looks like from the host.
+            emit({"type": "started", "requestId": request_id, "jobId": message.get("jobId")})
+
         elif command == "process":
             job_id = message.get("jobId")
             emit({"type": "started", "requestId": request_id, "jobId": job_id})
