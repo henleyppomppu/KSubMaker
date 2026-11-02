@@ -74,16 +74,27 @@ public static class JobFactory
         {
             if (existing is not null)
             {
-                return new EnqueueResult(EnqueueDecision.Unchanged, existing, "이미 한국어 자막이 있습니다.");
+                // A job that is finished, or that a worker is touching right now, is left as it is.
+                // Everything else — Pending, Failed, Cancelled, Skipped — is still going to run (or be
+                // retried) even though the subtitle it would produce is already on disk. That is
+                // exactly the case this rule exists for, and it is what a user sees after fixing the
+                // output suffix or copying finished subtitles in: a rescan must flip those rows to
+                // 완료, not leave them queued because they happened to be queued before.
+                if (existing.Status == JobStatus.Completed || JobStateMachine.IsActive(existing.Status)
+                    || existing.Status == JobStatus.Paused)
+                {
+                    return new EnqueueResult(EnqueueDecision.Unchanged, existing, "이미 한국어 자막이 있습니다.");
+                }
+
+                existing.HasExternalSubtitle = file.HasExternalSubtitle;
+                existing.HasKoreanSubtitle = true;
+                MarkAlreadyDone(existing, outputPath, now);
+                return new EnqueueResult(EnqueueDecision.AlreadyDone, existing, "이미 한국어 자막이 있어 완료로 표시했습니다.");
             }
 
             var done = Build(file, settings, outputPath, now);
-            done.Status = JobStatus.Completed;
-            done.CurrentStage = JobStage.Done;
-            done.OverallProgress = 100d;
-            done.StageProgress = 100d;
-            done.CompletedAtUtc = now;
-            done.OutputPath = outputPath;
+            done.HasKoreanSubtitle = true;
+            MarkAlreadyDone(done, outputPath, now);
             return new EnqueueResult(EnqueueDecision.AlreadyDone, done, "이미 한국어 자막이 있어 완료로 표시했습니다.");
         }
 
@@ -134,6 +145,26 @@ public static class JobFactory
         }
 
         return new EnqueueResult(EnqueueDecision.Created, Build(file, settings, outputPath, now), null);
+    }
+
+    /// <summary>
+    /// Puts a job into the same shape the pipeline leaves it in after writing the subtitle, without
+    /// going through <see cref="Job.TransitionTo"/> — the state machine only admits Completed from
+    /// WritingSubtitle, and nothing was written here.
+    /// </summary>
+    private static void MarkAlreadyDone(Job job, string outputPath, DateTime now)
+    {
+        job.Status = JobStatus.Completed;
+        job.CurrentStage = JobStage.Done;
+        job.OverallProgress = 100d;
+        job.StageProgress = 100d;
+        job.ErrorCode = null;
+        job.ErrorMessage = null;
+        job.EstimatedTimeRemaining = null;
+        job.ProcessingSpeed = 0d;
+        job.OutputPath = outputPath;
+        job.CompletedAtUtc = now;
+        job.UpdatedAtUtc = now;
     }
 
     private static Job Build(VideoFile file, AppSettings settings, string outputPath, DateTime now) => new()

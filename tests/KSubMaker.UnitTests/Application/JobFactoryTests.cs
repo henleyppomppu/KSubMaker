@@ -143,16 +143,66 @@ public sealed class JobFactoryTests
         result.Decision.Should().Be(EnqueueDecision.AlreadyDone);
     }
 
-    [Fact]
-    public void An_already_queued_file_with_a_korean_subtitle_is_left_alone()
+    // A rescan after the user fixed the output suffix (or copied finished subtitles in) must turn the
+    // rows that are still waiting into 완료. Before this, only a brand-new file was marked done; a job
+    // that happened to be queued already stayed Pending with the reason "이미 한국어 자막이 있습니다"
+    // and ran anyway — 67 lectures with a finished .srt beside each one went back through Whisper.
+    [Theory]
+    [InlineData(JobStatus.Pending)]
+    [InlineData(JobStatus.Failed)]
+    [InlineData(JobStatus.Cancelled)]
+    [InlineData(JobStatus.Skipped)]
+    public void An_already_queued_file_that_is_not_running_is_marked_done_when_korean_exists(JobStatus status)
     {
+        var existing = ExistingJob(status);
+        existing.ErrorCode = "X";
+        existing.ErrorMessage = "stale";
+        existing.OutputPath = Path.Combine("/videos", "movie.kor.srt");
+
+        var result = JobFactory.Create(File(koreanSidecar: true), existing, Settings(), NothingExists, Clock);
+
+        result.Decision.Should().Be(EnqueueDecision.AlreadyDone);
+        result.Job.Should().BeSameAs(existing);
+        existing.Status.Should().Be(JobStatus.Completed);
+        existing.CurrentStage.Should().Be(JobStage.Done);
+        existing.OverallProgress.Should().Be(100d);
+        existing.HasKoreanSubtitle.Should().BeTrue();
+        existing.ErrorCode.Should().BeNull();
+        existing.ErrorMessage.Should().BeNull();
+        existing.OutputPath.Should().EndWith("movie.ko.srt", "the stale .kor.srt target is replaced by the current one");
+        existing.CompletedAtUtc.Should().Be(Clock.GetUtcNow().UtcDateTime);
+        result.Reason.Should().Contain("이미 한국어 자막이 있어");
+    }
+
+    [Fact]
+    public void A_queued_file_whose_target_srt_appeared_on_disk_is_marked_done()
+    {
+        // The suffix was "" when these subtitles were written; the user set it back and rescanned.
         var existing = ExistingJob(JobStatus.Pending);
+
+        var result = JobFactory.Create(File(), existing, Settings(), OutputExists, Clock);
+
+        result.Decision.Should().Be(EnqueueDecision.AlreadyDone);
+        existing.Status.Should().Be(JobStatus.Completed);
+    }
+
+    [Theory]
+    [InlineData(JobStatus.Probing)]
+    [InlineData(JobStatus.ExtractingAudio)]
+    [InlineData(JobStatus.Transcribing)]
+    [InlineData(JobStatus.Translating)]
+    [InlineData(JobStatus.WritingSubtitle)]
+    [InlineData(JobStatus.Paused)]
+    [InlineData(JobStatus.Completed)]
+    public void A_running_or_finished_job_is_left_alone_even_when_korean_exists(JobStatus status)
+    {
+        var existing = ExistingJob(status);
 
         var result = JobFactory.Create(File(koreanSidecar: true), existing, Settings(), NothingExists, Clock);
 
         result.Decision.Should().Be(EnqueueDecision.Unchanged);
         result.Job.Should().BeSameAs(existing);
-        existing.Status.Should().Be(JobStatus.Pending);
+        existing.Status.Should().Be(status);
     }
 
     [Fact]
@@ -442,7 +492,7 @@ public sealed class JobFactoryTests
     }
 
     [Fact]
-    public void CompleteIfKoreanExists_leaves_an_existing_job_unchanged()
+    public void CompleteIfKoreanExists_marks_a_waiting_existing_job_as_done()
     {
         var settings = Settings(s =>
         {
@@ -453,8 +503,20 @@ public sealed class JobFactoryTests
 
         var result = JobFactory.Create(File(koreanSidecar: true), existing, settings, NothingExists, Clock);
 
-        result.Decision.Should().Be(EnqueueDecision.Unchanged);
-        existing.Status.Should().Be(JobStatus.Failed);
+        result.Decision.Should().Be(EnqueueDecision.AlreadyDone);
+        existing.Status.Should().Be(JobStatus.Completed);
+    }
+
+    [Fact]
+    public void ReprocessCompleted_still_requeues_a_waiting_job_that_has_korean()
+    {
+        var settings = Settings(s => s.ReprocessCompleted = true);
+        var existing = ExistingJob(JobStatus.Failed);
+
+        var result = JobFactory.Create(File(koreanSidecar: true), existing, settings, NothingExists, Clock);
+
+        result.Decision.Should().Be(EnqueueDecision.Requeued);
+        existing.Status.Should().Be(JobStatus.Pending);
     }
 
     [Fact]

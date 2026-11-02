@@ -440,6 +440,18 @@
   <data name="EnqueueSummaryTitle" xml:space="preserve">
     <value>작업 추가 결과</value>
   </data>
+  <data name="EnqueueSummaryRemovedFormat" xml:space="preserve">
+    <value> · 목록에서 뺌 {0}건</value>
+  </data>
+  <data name="FolderChangeDropsUnfinishedFormat" xml:space="preserve">
+    <value>다른 폴더에서 진행하던 작업 {0}건이 목록에서 빠지고 이어하기 정보도 지워집니다. 계속할까요?</value>
+  </data>
+  <data name="FolderChangeBlockedWhileBusy" xml:space="preserve">
+    <value>작업이 진행 중이라 폴더를 바꿀 수 없습니다. 중단하거나 작업이 끝난 뒤에 바꿔 주세요.</value>
+  </data>
+  <data name="FolderChangeCancelledMessage" xml:space="preserve">
+    <value>폴더 변경을 취소했습니다. 목록은 그대로입니다.</value>
+  </data>
   <data name="EnqueueSummaryFormat" xml:space="preserve">
     <value>새로 추가 {0}건 · 다시 넣음 {1}건 · 이미 완료 {2}건 · 변경 없음 {3}건 · 건너뜀 {4}건</value>
   </data>

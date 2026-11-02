@@ -187,11 +187,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyCanExecuteChangedFor(nameof(RemoveCompletedCommand))]
     private QueueState _queueStatus = QueueState.Idle;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyCanExecuteChangedFor(nameof(CancelScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
@@ -206,6 +210,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyCanExecuteChangedFor(nameof(CancelModelPreparationCommand))]
     private bool _isPreparingModels;
 
@@ -302,10 +308,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool IsQueueRunning => QueueStatus is QueueState.Running or QueueState.Pausing or QueueState.Stopping;
 
+    /// <summary>
+    /// Not gated on the queue: pressed while work is running, the command explains why it will not
+    /// scan (<see cref="ScanAsync"/>) rather than the button silently going grey.
+    /// </summary>
     private bool CanScan =>
-        !IsScanning && !IsQueueRunning && !IsPreparingModels && !string.IsNullOrWhiteSpace(TargetFolder);
+        !IsScanning && !IsPreparingModels && !string.IsNullOrWhiteSpace(TargetFolder);
+
+    /// <summary>Same idea for 폴더 선택: clickable, and it explains itself when it cannot act.</summary>
+    private bool CanBrowseFolder => !IsScanning && !IsPreparingModels;
+
+    /// <summary>True while a queue run is in progress or holding a paused job.</summary>
+    private bool IsQueueBusy => IsQueueRunning || QueueStatus == QueueState.Paused;
 
     private bool CanCancelScan => IsScanning;
+
+    /// <summary>
+    /// Whether the folder may be changed at all. Not while the queue runs or is paused: changing
+    /// folder replaces the list, and the job the queue is working on (or holding) would go with it.
+    /// Also gates the folder text box, so the folder cannot be swapped by typing either.
+    /// </summary>
+    public bool CanEditFolder =>
+        !IsScanning && !IsQueueRunning && !IsPreparingModels && QueueStatus != QueueState.Paused;
+
+    /// <summary>
+    /// The folder the current list was built from. A scan of any other folder replaces the list
+    /// (폴더 선택); a scan of this one re-checks it in place (목록 새로고침).
+    /// </summary>
+    private string? _listFolder;
 
     private bool CanStart => !IsQueueRunning && !IsScanning && !IsPreparingModels;
 
@@ -430,13 +460,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // Commands: folder + scan
     // -----------------------------------------------------------------------
 
-    [RelayCommand]
-    private void BrowseFolder()
+    /// <summary>
+    /// 폴더 선택: picking a folder is asking to see that folder, so the scan runs at once and the
+    /// list is rebuilt from it alone — no separate 목록 새로고침 click.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanBrowseFolder))]
+    private async Task BrowseFolderAsync()
     {
-        var picked = _dialogs.PickFolder(Strings.SelectFolderDialogTitle, TargetFolder);
-        if (!string.IsNullOrWhiteSpace(picked))
+        if (IsQueueBusy)
         {
-            TargetFolder = picked;
+            StatusMessage = Strings.FolderChangeBlockedWhileBusy;
+            _dialogs.ShowWarning(Strings.FolderChangeBlockedWhileBusy);
+            return;
+        }
+
+        var picked = _dialogs.PickFolder(Strings.SelectFolderDialogTitle, TargetFolder);
+        if (string.IsNullOrWhiteSpace(picked))
+        {
+            return;
+        }
+
+        TargetFolder = picked;
+
+        if (ScanCommand.CanExecute(null))
+        {
+            await ScanAsync().ConfigureAwait(true);
         }
     }
 
@@ -451,6 +499,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         var folder = TargetFolder.Trim();
+
+        // A paused queue still holds a job; refreshing its own folder is fine, switching away is not.
+        if (QueueStatus == QueueState.Paused && !QueueListReconciler.IsSameFolder(folder, _listFolder))
+        {
+            StatusMessage = Strings.FolderChangeBlockedWhileBusy;
+            _dialogs.ShowWarning(Strings.FolderChangeBlockedWhileBusy);
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(folder))
         {
@@ -484,6 +540,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // ScanAsync already hops onto the thread pool; awaiting it keeps the UI live.
             var report = await _scanService.ScanAsync(request, cts.Token).ConfigureAwait(true);
 
+            var removedCount = await ReconcileListAsync(folder, report.Files, cts.Token).ConfigureAwait(true);
+            if (removedCount is null)
+            {
+                StatusMessage = Strings.FolderChangeCancelledMessage;
+                return;
+            }
+
             if (report.Files.Count == 0)
             {
                 StatusMessage = Strings.ScanNoFilesFound;
@@ -502,7 +565,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             await ProbeNewlyQueuedAsync(report.Files, results, cts.Token).ConfigureAwait(true);
 
-            ShowEnqueueSummary(results);
+            ShowEnqueueSummary(results, removedCount.Value);
 
             // After the summary: the prompt is modal and per file, so the user should already know
             // how many files the scan produced before being asked about them one at a time.
@@ -708,7 +771,50 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }).ConfigureAwait(true);
     }
 
-    private void ShowEnqueueSummary(IReadOnlyList<EnqueueResult> results)
+    /// <summary>
+    /// Takes away the rows this scan makes obsolete (see <see cref="QueueListReconciler"/>): every
+    /// row outside a newly picked folder, or, on a re-scan of the same folder, rows whose video is
+    /// gone. Returns how many were removed, or null when the user declined to drop unfinished work.
+    /// </summary>
+    private async Task<int?> ReconcileListAsync(
+        string folder,
+        IReadOnlyList<VideoFile> scanned,
+        CancellationToken cancellationToken)
+    {
+        var jobs = _queue.Jobs;
+        var folderChanged = !QueueListReconciler.IsSameFolder(folder, _listFolder);
+
+        var drop = folderChanged
+            ? QueueListReconciler.DropOnFolderChange(jobs, scanned.Select(f => f.FullPath))
+            : QueueListReconciler.DropOnRefresh(jobs, File.Exists);
+
+        if (drop.Count > 0 && folderChanged)
+        {
+            // Removing a row deletes its resume cache too, so part-done work elsewhere is asked about.
+            var unfinished = drop.Count(QueueListReconciler.HasUnfinishedProgress);
+            if (unfinished > 0 && !_dialogs.Confirm(
+                    string.Format(CultureInfo.CurrentCulture, Strings.FolderChangeDropsUnfinishedFormat, unfinished),
+                    Strings.SelectFolderButton))
+            {
+                return null;
+            }
+        }
+
+        _listFolder = folder;
+
+        if (drop.Count == 0)
+        {
+            return 0;
+        }
+
+        var result = await _queue.RemoveAsync(drop.Select(j => j.Id), cancellationToken: cancellationToken)
+            .ConfigureAwait(true);
+
+        RemoveRows(result.Removed);
+        return result.Removed.Count;
+    }
+
+    private void ShowEnqueueSummary(IReadOnlyList<EnqueueResult> results, int removed = 0)
     {
         var created = 0;
         var requeued = 0;
@@ -732,6 +838,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             CultureInfo.CurrentCulture,
             Strings.EnqueueSummaryFormat,
             created, requeued, alreadyDone, unchanged, skipped);
+
+        if (removed > 0)
+        {
+            summary += string.Format(CultureInfo.CurrentCulture, Strings.EnqueueSummaryRemovedFormat, removed);
+        }
 
         StatusMessage = summary;
         _dialogs.ShowInformation(summary, Strings.EnqueueSummaryTitle);
@@ -2057,6 +2168,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(TargetFolder) && !string.IsNullOrWhiteSpace(settings.LastFolder))
         {
             TargetFolder = settings.LastFolder;
+
+            // The list restored from the database was built from this folder, so the first
+            // 목록 새로고침 after a restart re-checks it instead of treating it as a new folder.
+            _listFolder ??= settings.LastFolder;
         }
 
         IncludeSubfolders = settings.IncludeSubfolders;
