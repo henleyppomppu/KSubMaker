@@ -1085,7 +1085,7 @@ public static partial class Strings
     /// <summary>로컬 LLM</summary>
     public static string ModelKindLlm => Get(nameof(ModelKindLlm));
 
-    /// <summary>영상 하나를 두 단계로 처리합니다 — 먼저 음성 인식 모델이 말소리를 원어 자막으로 뽑아내고, 그다음 번역 모델이 그 자막을 한국어로 다시 옮깁니다. 아래 탭에서 각 단계에 쓸 모델을 고릅니다.</summary>
+    /// <summary>영상 하나를 두 단계로 처리합니다 — 먼저 음성 인식 모델이 말소리를 원어 자막으로 뽑아내고, 그다음 번역 모델이 그 자막을 한국어로 다시 옮깁니다. 아래 두 목록의 "사용"에서 각 단계에 쓸 모델을 고릅니다.</summary>
     public static string ModelPipelineOverviewHint => Get(nameof(ModelPipelineOverviewHint));
 
     /// <summary>1차적으로 음성에서 자막을 추출하는 모델입니다. 영상 속 말소리를 원어 텍스트로 받아쓰며, 모델이 클수록 정확하지만 느립니다.</summary>
@@ -1343,9 +1343,6 @@ public static partial class Strings
     /// <summary>커뮤니티</summary>
     public static string AboutCommunityLabel => Get(nameof(AboutCommunityLabel));
 
-    /// <summary>디스코드</summary>
-    public static string DiscordMenuItem => Get(nameof(DiscordMenuItem));
-
     /// <summary>파일</summary>
     public static string MenuFile => Get(nameof(MenuFile));
 
@@ -1358,9 +1355,6 @@ public static partial class Strings
     /// <summary>도구</summary>
     public static string MenuTools => Get(nameof(MenuTools));
 
-    /// <summary>도움말</summary>
-    public static string MenuHelp => Get(nameof(MenuHelp));
-
     /// <summary>폴더 열기…</summary>
     public static string OpenFolderMenuItem => Get(nameof(OpenFolderMenuItem));
 
@@ -1372,4 +1366,40 @@ public static partial class Strings
 
     /// <summary>끝내기</summary>
     public static string ExitMenuItem => Get(nameof(ExitMenuItem));
+
+    /// <summary>사용</summary>
+    public static string ModelColumnInUse => Get(nameof(ModelColumnInUse));
+
+    /// <summary>이 모델을 사용합니다. 설치된 모델만 고를 수 있습니다.</summary>
+    public static string ModelUseRadioTooltip => Get(nameof(ModelUseRadioTooltip));
+
+    /// <summary>'{0}'은(는) 아직 설치되지 않았습니다. 먼저 다운로드하세요.</summary>
+    public static string ModelNotInstalledForUseFormat => Get(nameof(ModelNotInstalledForUseFormat));
+
+    /// <summary>'{0}'을(를) 이미 사용 중입니다.</summary>
+    public static string ModelAlreadyInUseFormat => Get(nameof(ModelAlreadyInUseFormat));
+
+    /// <summary>정보</summary>
+    public static string MenuAbout => Get(nameof(MenuAbout));
+
+    /// <summary>디스코드 커뮤니티</summary>
+    public static string DiscordCommunityMenuItem => Get(nameof(DiscordCommunityMenuItem));
+
+    /// <summary>소스 저장소 (GitHub)</summary>
+    public static string RepositoryMenuItem => Get(nameof(RepositoryMenuItem));
+
+    /// <summary>모델</summary>
+    public static string ModelGroupCaption => Get(nameof(ModelGroupCaption));
+
+    /// <summary>관리…</summary>
+    public static string ManageModelsButton => Get(nameof(ManageModelsButton));
+
+    /// <summary>설치된 모델만 나옵니다. 더 받으려면 관리…를 누르세요. 고르면 바로 저장되고, 다음 시작부터 적용됩니다.</summary>
+    public static string ModelChoiceHint => Get(nameof(ModelChoiceHint));
+
+    /// <summary>모델 선택을 저장했습니다.</summary>
+    public static string ModelChoiceSavedMessage => Get(nameof(ModelChoiceSavedMessage));
+
+    /// <summary>모델 선택을 저장했습니다. 지금 도는 작업에는 적용되지 않고 다음 시작부터 적용됩니다.</summary>
+    public static string ModelChoiceSavedNextRunMessage => Get(nameof(ModelChoiceSavedNextRunMessage));
 }

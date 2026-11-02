@@ -24,8 +24,13 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(viewModel);
 
         _viewModel = viewModel;
+
         InitializeComponent();
         DataContext = viewModel;
+
+        // After InitializeComponent: named elements do not exist before it.
+        var version = typeof(MainWindow).Assembly.GetName().Version;
+        VersionMenuItem.Header = version is null ? "KSubMaker" : $"KSubMaker {version.ToString(3)}";
     }
 
     /// <summary>
@@ -63,6 +68,12 @@ public partial class MainWindow : Window
     /// is the payload extraction.
     /// </summary>
     private void OnOpenDiscord(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Discord);
+
+    private void OnOpenRepository(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Repository);
+
+    /// <summary>A model downloaded in 모델 관리 shows up the next time a list is opened.</summary>
+    private async void OnModelChoicesOpened(object? sender, EventArgs e) =>
+        await _viewModel.RefreshModelChoicesAsync();
 
     private void OnExit(object sender, RoutedEventArgs e) => Close();
 

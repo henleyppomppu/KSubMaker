@@ -42,6 +42,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
     {
         _modelManager = modelManager;
         _settingsService = settingsService;
+        _settingsService.SettingsChanged += OnSettingsChanged;
         _paths = paths;
         _dialogs = dialogs;
         _shell = shell;
@@ -62,6 +63,95 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
+    /// <summary>
+    /// The highlighted row of the 음성 인식 list. Each list has its own, because two grids bound to
+    /// one SelectedItem push null into it whenever the other list's row is picked.
+    /// </summary>
+    [ObservableProperty]
+    private ModelRowViewModel? _selectedRecognitionModel;
+
+    /// <summary>The highlighted row of the 번역 list.</summary>
+    [ObservableProperty]
+    private ModelRowViewModel? _selectedTranslationModel;
+
+    partial void OnSelectedRecognitionModelChanged(ModelRowViewModel? value)
+    {
+        if (value is not null)
+        {
+            SelectedModel = value;
+            SelectedTranslationModel = null;
+        }
+    }
+
+    partial void OnSelectedTranslationModelChanged(ModelRowViewModel? value)
+    {
+        if (value is not null)
+        {
+            SelectedModel = value;
+            SelectedRecognitionModel = null;
+        }
+    }
+
+    /// <summary>
+    /// 사용 radio: makes this installed model the one its step uses — the same change, and the same
+    /// question when the translation engine would switch, as the offer after a download.
+    /// </summary>
+    [RelayCommand]
+    private async Task UseModelAsync(ModelRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!row.IsInstalled)
+            {
+                _dialogs.ShowWarning(
+                    string.Format(CultureInfo.CurrentCulture, Strings.ModelNotInstalledForUseFormat, row.DisplayName),
+                    Strings.ModelUseAfterDownloadTitle);
+                return;
+            }
+
+            await OfferToUseAsync(row, explicitRequest: true).ConfigureAwait(true);
+        }
+        finally
+        {
+            UpdateInUse();
+        }
+    }
+
+    /// <summary>Marks, in each list, the model the settings point at.</summary>
+    private void UpdateInUse()
+    {
+        var settings = _settingsService.Current;
+        var translation = TranslationChoice.Selected(settings);
+        var whisperAuto = settings.WhisperModel.Equals(ModelSelectionValidator.AutoModelId, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var row in Models)
+        {
+            var inUse = row.Kind switch
+            {
+                ModelKind.Whisper => whisperAuto
+                    ? row.IsRecommended
+                    : row.Id.Equals(settings.WhisperModel, StringComparison.OrdinalIgnoreCase),
+                ModelKind.Translation => translation == TranslationChoice.AutoTranslationId
+                    ? row.IsRecommended
+                    : row.Id.Equals(translation, StringComparison.OrdinalIgnoreCase),
+                ModelKind.Llm => translation == TranslationChoice.AutoLlmId
+                    ? row.IsRecommended
+                    : row.Id.Equals(translation, StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+
+            row.SetInUse(inUse);
+        }
+    }
+
+    private void OnSettingsChanged(object? sender, AppSettings e) =>
+        _ = System.Windows.Application.Current?.Dispatcher.InvokeAsync(UpdateInUse);
+
     [ObservableProperty]
     private bool _isBusy;
 
@@ -69,7 +159,36 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
 
     private bool CanPause => SelectedModel is { IsDownloading: true };
 
-    private bool CanMutate => SelectedModel is { IsDownloading: false };
+    /// <summary>삭제 and 검증 act on files on disk: a model that is not installed has none.</summary>
+    private bool CanMutateInstalled => SelectedModel is { IsDownloading: false, IsInstalled: true };
+
+    /// <summary>
+    /// The buttons follow the highlighted row's own state too: a download finishing or a delete
+    /// completing changes what they can do without the selection moving.
+    /// </summary>
+    partial void OnSelectedModelChanged(ModelRowViewModel? oldValue, ModelRowViewModel? newValue)
+    {
+        if (oldValue is not null)
+        {
+            oldValue.PropertyChanged -= OnSelectedRowChanged;
+        }
+
+        if (newValue is not null)
+        {
+            newValue.PropertyChanged += OnSelectedRowChanged;
+        }
+    }
+
+    private void OnSelectedRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ModelRowViewModel.IsInstalled) or nameof(ModelRowViewModel.IsDownloading))
+        {
+            DownloadCommand.NotifyCanExecuteChanged();
+            PauseDownloadCommand.NotifyCanExecuteChanged();
+            DeleteCommand.NotifyCanExecuteChanged();
+            VerifyCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     // -----------------------------------------------------------------------
     // Loading
@@ -90,7 +209,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
             {
                 var rows = statuses.Select(s => new ModelRowViewModel(s)).ToArray();
                 Models.Reset(rows);
-                SelectedModel ??= rows.FirstOrDefault();
+                SelectedRecognitionModel ??= rows.FirstOrDefault(r => r.Kind == ModelKind.Whisper);
             }
             else
             {
@@ -110,6 +229,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
                 }
             }
 
+            UpdateInUse();
             StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.ModelsLoadedFormat, Models.Count);
         }
         catch (OperationCanceledException)
@@ -203,7 +323,11 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
     /// <see cref="TranslationEngineKind.LocalLlm"/>, and the prompt says so — switching engines is a
     /// bigger change than picking a model and must not happen behind the user's back.</para>
     /// </summary>
-    private async Task OfferToUseAsync(ModelRowViewModel row)
+    /// <param name="explicitRequest">
+    /// True for the 사용 radio: the user asked for exactly this, so only an engine switch is
+    /// confirmed, and "already in use" is said rather than silently ignored.
+    /// </param>
+    private async Task OfferToUseAsync(ModelRowViewModel row, bool explicitRequest = false)
     {
         var settings = _settingsService.Current;
 
@@ -242,6 +366,11 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
         // is exactly the case that used to leave the setting inert.
         if (!slotNeedsChange && !engineNeedsChange)
         {
+            if (explicitRequest)
+            {
+                StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.ModelAlreadyInUseFormat, row.DisplayName);
+            }
+
             return;
         }
 
@@ -261,7 +390,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
                 DisplayText.TranslationEngineName(settings.TranslationEngine));
         }
 
-        if (!_dialogs.Confirm(question, Strings.ModelUseAfterDownloadTitle))
+        if ((!explicitRequest || engineNeedsChange) && !_dialogs.Confirm(question, Strings.ModelUseAfterDownloadTitle))
         {
             return;
         }
@@ -366,7 +495,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
     // Delete / verify / open folder
     // -----------------------------------------------------------------------
 
-    [RelayCommand(CanExecute = nameof(CanMutate))]
+    [RelayCommand(CanExecute = nameof(CanMutateInstalled))]
     private async Task DeleteAsync(CancellationToken cancellationToken)
     {
         var row = SelectedModel;
@@ -412,7 +541,7 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanMutate))]
+    [RelayCommand(CanExecute = nameof(CanMutateInstalled))]
     private async Task VerifyAsync(CancellationToken cancellationToken)
     {
         var row = SelectedModel;
@@ -488,6 +617,8 @@ public sealed partial class ModelsViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _settingsService.SettingsChanged -= OnSettingsChanged;
+
         if (_disposed)
         {
             return;

@@ -45,6 +45,20 @@ public sealed partial class ModelRowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _displayName;
 
+    /// <summary>The model the settings point at for this step — the 사용 radio.</summary>
+    [ObservableProperty]
+    private bool _isInUse;
+
+    /// <summary>
+    /// Sets <see cref="IsInUse"/> and always announces it: a radio the user clicked shows checked
+    /// even when the change was then declined, and only a fresh notification puts it back.
+    /// </summary>
+    public void SetInUse(bool value)
+    {
+        IsInUse = value;
+        OnPropertyChanged(nameof(IsInUse));
+    }
+
     [ObservableProperty]
     private string _description;
 

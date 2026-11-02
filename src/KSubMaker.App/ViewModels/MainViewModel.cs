@@ -394,6 +394,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SyncPlaylists();
         OnViewChanged();
         _ = InitializeFolderTreeAsync();
+        _ = RefreshModelChoicesAsync();
 
         try
         {
@@ -2141,6 +2142,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var previous = _settings;
             _settings = snapshot;
             ApplySettings(snapshot);
+            await RefreshModelChoicesAsync().ConfigureAwait(true);
             await OfferOutputRelocationAsync(previous, snapshot).ConfigureAwait(true);
         });
     }

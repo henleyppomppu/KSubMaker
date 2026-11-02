@@ -2,10 +2,12 @@ using System.Diagnostics;
 
 namespace KSubMaker.App.Services;
 
-/// <summary>Outside links the app points to: the community Discord.</summary>
+/// <summary>Outside links the app points to: the community Discord and the source repository.</summary>
 public static class AppLinks
 {
     public const string Discord = "https://discord.gg/BT6ZKkBxn";
+
+    public const string Repository = "https://github.com/henleyppomppu/KSubMaker";
 
     /// <summary>The link as shown, without the scheme.</summary>
     public const string DiscordText = "discord.gg/BT6ZKkBxn";

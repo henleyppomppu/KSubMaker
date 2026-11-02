@@ -114,14 +114,19 @@
                 <MenuItem Header="{x:Static res:Strings.OpenSourceFolderButton}" Command="{Binding OpenSourceFolderCommand}" />
             </MenuItem>
             <MenuItem Header="{x:Static res:Strings.MenuTools}">
-                <MenuItem Header="{x:Static res:Strings.SettingsButton}" Command="{Binding OpenSettingsCommand}" />
                 <MenuItem Header="{x:Static res:Strings.ModelsButton}" Command="{Binding OpenModelsCommand}" />
                 <MenuItem Header="{x:Static res:Strings.OpenLogButton}" Command="{Binding OpenLogWindowCommand}" />
             </MenuItem>
-            <MenuItem Header="{x:Static res:Strings.MenuHelp}">
-                <MenuItem Header="{x:Static res:Strings.DiscordMenuItem}"
+            <MenuItem Header="{x:Static res:Strings.SettingsButton}" Command="{Binding OpenSettingsCommand}" />
+            <MenuItem Header="{x:Static res:Strings.MenuAbout}">
+                <MenuItem Header="{x:Static res:Strings.DiscordCommunityMenuItem}"
                           ToolTip="{x:Static svc:AppLinks.Discord}"
                           Click="OnOpenDiscord" />
+                <MenuItem Header="{x:Static res:Strings.RepositoryMenuItem}"
+                          ToolTip="{x:Static svc:AppLinks.Repository}"
+                          Click="OnOpenRepository" />
+                <Separator />
+                <MenuItem x:Name="VersionMenuItem" IsEnabled="False" />
             </MenuItem>
         </Menu>
 
@@ -209,6 +214,42 @@
                                       Margin="0,0,4,4"
                                       VerticalAlignment="Center"
                                       ToolTip="{x:Static res:Strings.PostQueueActionHint}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+
+                    <!-- 모델: which installed model each step uses; saved at once, used from the next 시작 -->
+                    <Border Style="{StaticResource GroupCard}" ToolTip="{x:Static res:Strings.ModelChoiceHint}">
+                      <StackPanel>
+                        <TextBlock Text="{x:Static res:Strings.ModelGroupCaption}" Style="{StaticResource GroupCaption}" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static res:Strings.ModelKindWhisper}"
+                                       Style="{StaticResource LabelText}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,4" />
+                            <ComboBox ItemsSource="{Binding WhisperChoices}"
+                                      DisplayMemberPath="Display"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedWhisperChoice}"
+                                      DropDownOpened="OnModelChoicesOpened"
+                                      MinWidth="170"
+                                      Margin="0,0,10,4"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static res:Strings.ModelKindTranslation}"
+                                       Style="{StaticResource LabelText}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,4" />
+                            <ComboBox ItemsSource="{Binding TranslationChoices}"
+                                      DisplayMemberPath="Display"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedTranslationChoice}"
+                                      DropDownOpened="OnModelChoicesOpened"
+                                      MinWidth="170"
+                                      Margin="0,0,6,4"
+                                      VerticalAlignment="Center" />
+                            <Button Content="{x:Static res:Strings.ManageModelsButton}"
+                                    Command="{Binding OpenModelsCommand}"
+                                    Style="{StaticResource ToolButton}" />
                         </StackPanel>
                       </StackPanel>
                     </Border>
