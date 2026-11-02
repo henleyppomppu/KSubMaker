@@ -46,6 +46,12 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
             CueCount = 12
         };
 
+        /// <summary>
+        /// When set, these events are raised in order for a <c>process</c> command instead of
+        /// <see cref="Reply"/> — for interleavings such as another request's event arriving first.
+        /// </summary>
+        public Func<ProcessCommand, IReadOnlyList<WorkerEvent>>? Sequence { get; set; }
+
         public bool IsRunning { get; private set; }
 
         public event EventHandler<WorkerEvent>? EventReceived;
@@ -66,8 +72,14 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
             {
                 // Raised on a pool thread, like the real client's reader task, so the processor's
                 // completion source is exercised the same way.
-                var reply = Reply(process);
-                _ = Task.Run(() => EventReceived?.Invoke(this, reply), CancellationToken.None);
+                var events = Sequence?.Invoke(process) ?? [Reply(process)];
+                _ = Task.Run(() =>
+                {
+                    foreach (var workerEvent in events)
+                    {
+                        EventReceived?.Invoke(this, workerEvent);
+                    }
+                }, CancellationToken.None);
             }
 
             return Task.CompletedTask;
@@ -95,9 +107,10 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
         Job job,
         AppSettings settings,
         JobPhase phase = JobPhase.Full,
-        Func<ProcessCommand, WorkerEvent>? reply = null)
+        Func<ProcessCommand, WorkerEvent>? reply = null,
+        Func<ProcessCommand, IReadOnlyList<WorkerEvent>>? sequence = null)
     {
-        var client = new RecordingWorkerClient();
+        var client = new RecordingWorkerClient { Sequence = sequence };
         if (reply is not null)
         {
             client.Reply = reply;
@@ -126,6 +139,58 @@ public sealed class WorkerJobProcessorCommandTests : IDisposable
         FileName = name,
         DurationSeconds = 60d
     };
+
+    // -----------------------------------------------------------------------
+    // events from another request for the same job
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// The prefetch lane's extractAudio for this very job finishes while the job is running and
+    /// reports `completed` (skipped, no output) with the job's id. That used to finish the job in
+    /// 1.1s with no subtitle, while the worker kept running the real one (2026-11-02).
+    /// </summary>
+    [Fact]
+    public async Task A_completed_event_from_another_request_for_the_same_job_is_ignored()
+    {
+        var (command, result) = await RunAsync(NewJob(), new AppSettings(), sequence: process =>
+        [
+            new CompletedEvent
+            {
+                JobId = process.JobId,
+                RequestId = "prefetch-request",
+                OutputPath = string.Empty,
+                CueCount = 0,
+                Skipped = true
+            },
+            new CompletedEvent
+            {
+                JobId = process.JobId,
+                RequestId = process.RequestId,
+                OutputPath = process.OutputPath,
+                CueCount = 12
+            }
+        ]);
+
+        result.Success.Should().BeTrue();
+        result.OutputPath.Should().Be(command.OutputPath, "only the process request's own completion counts");
+        result.CueCount.Should().Be(12);
+    }
+
+    [Fact]
+    public async Task An_event_without_a_request_id_still_applies()
+    {
+        // The watchdog synthesises an error with the job id and no request id.
+        var (_, result) = await RunAsync(NewJob(), new AppSettings(), reply: process => new ErrorEvent
+        {
+            JobId = process.JobId,
+            Code = "WORKER_CRASHED",
+            Message = "장시간 응답 없음",
+            Recoverable = true
+        });
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be("WORKER_CRASHED");
+    }
 
     // -----------------------------------------------------------------------
     // wordTimestamps — the flag that keeps a broken conversion from killing the worker

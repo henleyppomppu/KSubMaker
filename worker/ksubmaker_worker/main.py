@@ -246,8 +246,27 @@ class Worker:
     # job thread
     # -----------------------------------------------------------------------
 
+    #: How long a new job waits for the previous job thread to finish unwinding. The host sends the
+    #: next ``process`` the moment it reads ``completed``, but the thread that emitted it still has
+    #: its ``finally`` blocks and return ahead of it, and refusing in that window fails a healthy
+    #: file with PROTOCOL_ERROR ("이미 실행 중인 작업이 있습니다").
+    #:
+    #: A defensive measure, not the fix for the 2026-11-02 incident: there the host had taken the
+    #: *prefetch's* ``completed`` for the job's own and moved on while the real job was still
+    #: running for minutes (fixed in WorkerJobProcessor by matching the request id). A job that is
+    #: genuinely still running is refused exactly as before, just this much later.
+    JOB_HANDOFF_GRACE_SECONDS: float = 5.0
+
     def _start_job(self, command: Mapping[str, Any], body: Any, *, job_id: str) -> None:
         request_id = command.get("requestId")
+
+        with self._job_lock:
+            previous = self._job_thread
+
+        if previous is not None and previous.is_alive():
+            # Outside the lock: the finishing thread does not need it, but a cancel arriving on
+            # another path must not be held up behind this wait.
+            previous.join(self.JOB_HANDOFF_GRACE_SECONDS)
 
         with self._job_lock:
             if self._job_thread is not None and self._job_thread.is_alive():

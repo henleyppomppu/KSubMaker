@@ -299,7 +299,41 @@ def test_a_job_runs_on_a_background_thread_and_is_acked(channel) -> None:
     assert channel.first("completed") is not None
 
 
-def test_a_second_job_is_refused_while_one_is_running(channel) -> None:
+def test_a_job_sent_while_the_previous_thread_is_still_unwinding_is_accepted(channel) -> None:
+    """The host sends the next ``process`` as soon as it reads ``completed``; the thread that sent
+    it may not have returned yet, and that window used to be refused with PROTOCOL_ERROR."""
+    started: list[str] = []
+
+    class SlowToReturn(FakeHandlers):
+        def process(self, command: dict[str, Any], token: CancellationToken) -> None:
+            started.append(str(command.get("jobId")))
+            protocol.emit_completed(
+                output_path="", cue_count=0, request_id=command.get("requestId"), job_id=command.get("jobId")
+            )
+            time.sleep(0.3)  # cleanup after the terminal event, still on the job thread
+
+    handlers = SlowToReturn()
+    worker = Worker(handlers)
+
+    worker._start_job(  # noqa: SLF001
+        {"command": "process", "requestId": "r1", "jobId": "j1"},
+        lambda token: handlers.process({"requestId": "r1", "jobId": "j1"}, token),
+        job_id="j1",
+    )
+    # Immediately, like the host does on reading `completed`.
+    worker._start_job(  # noqa: SLF001
+        {"command": "process", "requestId": "r2", "jobId": "j2"},
+        lambda token: handlers.process({"requestId": "r2", "jobId": "j2"}, token),
+        job_id="j2",
+    )
+    worker._join_job(5.0)  # noqa: SLF001
+
+    assert started == ["j1", "j2"]
+    assert not any(e["code"] == "PROTOCOL_ERROR" for e in channel.of_type("error"))
+
+
+def test_a_second_job_is_refused_while_one_is_running(channel, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Worker, "JOB_HANDOFF_GRACE_SECONDS", 0.2)
     handlers = FakeHandlers()
     worker = Worker(
         handlers,

@@ -116,7 +116,7 @@ public sealed class WorkerJobProcessor : IJobProcessor
         var stopwatch = Stopwatch.StartNew();
 
         var completion = new TaskCompletionSource<JobExecutionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var state = new JobState(job.Id);
+        var state = new JobState(job.Id, command.RequestId);
 
         void OnEvent(object? sender, WorkerEvent workerEvent) =>
             HandleEvent(workerEvent, job, settings, state, progress, completion);
@@ -443,6 +443,18 @@ public sealed class WorkerJobProcessor : IJobProcessor
         // The shared client multiplexes every job; anything that is not ours (or not job-scoped) is
         // none of our business.
         if (workerEvent.JobId is not null && !string.Equals(workerEvent.JobId, state.JobId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // The job id alone is not enough. The prefetch lane extracts audio *for this same job* under
+        // its own extractAudio request, and its `completed` (skipped, no output) carries this job's
+        // id. Accepting it finished the job in 1.1s with no subtitle written, while the worker kept
+        // running the real one — so the next two files were refused with PROTOCOL_ERROR "이미 실행
+        // 중인 작업이 있습니다" (2026-11-02). Events without a request id — the watchdog's synthesised
+        // error — still apply.
+        if (workerEvent.RequestId is { } requestId
+            && !string.Equals(requestId, state.RequestId, StringComparison.Ordinal))
         {
             return;
         }
@@ -906,9 +918,12 @@ public sealed class WorkerJobProcessor : IJobProcessor
     /// needed; the fields exist because the wire protocol reports language and stage separately from
     /// progress and both have to be re-sent on every <see cref="JobProgress"/>.
     /// </summary>
-    private sealed class JobState(string jobId)
+    private sealed class JobState(string jobId, string requestId)
     {
         public string JobId { get; } = jobId;
+
+        /// <summary>The <c>process</c> command's request id; events from other requests are not ours.</summary>
+        public string RequestId { get; } = requestId;
         public JobStage Stage { get; set; } = JobStage.Probing;
         public double StageProgress { get; set; }
         public string? DetectedLanguage { get; set; }
