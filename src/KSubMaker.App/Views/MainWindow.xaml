@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:KSubMaker.App.Resources"
+        xmlns:controls="clr-namespace:KSubMaker.App.Controls"
         Title="{x:Static res:Strings.MainWindowTitle}"
         Height="760"
         Width="1600"
@@ -290,7 +291,7 @@
         </Border>
 
         <!-- ======================= job grid ======================= -->
-        <DataGrid ItemsSource="{Binding Jobs}"
+        <controls:JobGrid ItemsSource="{Binding Jobs}"
                   SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                   AllowDrop="True"
                   DragOver="OnQueueDragOver"
@@ -583,7 +584,7 @@
                 </DataGridTemplateColumn>
 
             </DataGrid.Columns>
-        </DataGrid>
+        </controls:JobGrid>
 
     </DockPanel>
 </Window>
