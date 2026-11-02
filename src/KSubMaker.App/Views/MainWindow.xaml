@@ -389,13 +389,26 @@
                                                                   Style="{StaticResource TreeChevron}"
                                                                   ClickMode="Press"
                                                                   IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}" />
-                                                    <TextBlock x:Name="Icon"
+                                                    <!-- drives: a system glyph; folders: a filled two-tone folder like Explorer's -->
+                                                    <TextBlock x:Name="DriveIcon"
                                                                Grid.Column="1"
                                                                Text="{Binding Glyph}"
                                                                FontFamily="Segoe MDL2 Assets"
                                                                FontSize="14"
-                                                               Foreground="#E0A12E"
-                                                               VerticalAlignment="Center" />
+                                                               Foreground="#5B6B80"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="Collapsed" />
+                                                    <Canvas x:Name="FolderIcon"
+                                                            Grid.Column="1"
+                                                            Width="16"
+                                                            Height="13"
+                                                            HorizontalAlignment="Left"
+                                                            VerticalAlignment="Center">
+                                                        <Path Fill="#E3A42A"
+                                                              Data="M0,1.6 C0,0.7 0.7,0 1.6,0 L5.6,0 L7.2,1.8 L14.4,1.8 C15.3,1.8 16,2.5 16,3.4 L16,11.4 C16,12.3 15.3,13 14.4,13 L1.6,13 C0.7,13 0,12.3 0,11.4 Z" />
+                                                        <Path Fill="#F9C74F"
+                                                              Data="M0,4.4 L16,4.4 L16,11.4 C16,12.3 15.3,13 14.4,13 L1.6,13 C0.7,13 0,12.3 0,11.4 Z" />
+                                                    </Canvas>
                                                     <ContentPresenter Grid.Column="2"
                                                                       ContentSource="Header"
                                                                       VerticalAlignment="Center" />
@@ -411,7 +424,8 @@
                                                 <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
                                             </Trigger>
                                             <DataTrigger Binding="{Binding IsDrive}" Value="True">
-                                                <Setter TargetName="Icon" Property="Foreground" Value="#5B6B80" />
+                                                <Setter TargetName="DriveIcon" Property="Visibility" Value="Visible" />
+                                                <Setter TargetName="FolderIcon" Property="Visibility" Value="Collapsed" />
                                             </DataTrigger>
                                             <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
                                                 <Setter TargetName="Row" Property="Background" Value="#E9EDF3" />

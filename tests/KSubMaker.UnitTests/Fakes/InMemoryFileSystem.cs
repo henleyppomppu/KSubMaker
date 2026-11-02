@@ -154,8 +154,12 @@ public sealed class InMemoryFileSystem : IFileSystem
             : [];
     }
 
+    /// <summary>How many times each folder's files were listed. A network listing is a round trip.</summary>
+    public Dictionary<string, int> FileListings { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public IEnumerable<string> EnumerateFiles(string path)
     {
+        FileListings[path] = FileListings.GetValueOrDefault(path) + 1;
         var literal = Normalize(path);
         ThrowIfDenied(literal);
 

@@ -36,12 +36,26 @@ public sealed class PhysicalFileSystem(ILogger<PhysicalFileSystem> logger) : IFi
         SafeEnumerate(path, static p => Directory.EnumerateFiles(p, "*", Options), "파일");
 
     /// <summary>
+    /// FileInfo objects from an enumeration come with size, dates and attributes already filled in
+    /// from the directory listing, so this costs one listing however many files there are.
+    /// </summary>
+    public IEnumerable<FileEntry> EnumerateFileEntries(string path) =>
+        SafeEnumerate(
+            path,
+            static p => new DirectoryInfo(p).EnumerateFiles("*", Options).Select(static f => new FileEntry(
+                f.FullName,
+                f.Length,
+                f.LastWriteTimeUtc,
+                (f.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)),
+            "파일");
+
+    /// <summary>
     /// Materialises the enumeration inside the try/catch. <c>Directory.EnumerateX</c> is lazy, so a
     /// naive <c>try { yield return ... }</c> would let the exception escape at the *caller's*
     /// MoveNext, which is exactly the failure mode this method exists to prevent. IgnoreInaccessible
     /// covers denials on children; the try/catch covers a denial on the directory itself.
     /// </summary>
-    private string[] SafeEnumerate(string path, Func<string, IEnumerable<string>> enumerate, string what)
+    private T[] SafeEnumerate<T>(string path, Func<string, IEnumerable<T>> enumerate, string what)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
