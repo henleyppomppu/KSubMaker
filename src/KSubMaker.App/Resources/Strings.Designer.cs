@@ -415,9 +415,6 @@ public static partial class Strings
     /// <summary>파일 정보를 확인하는 중입니다... ({0}/{1})</summary>
     public static string ProbingFilesFormat => Get(nameof(ProbingFilesFormat));
 
-    /// <summary>작업 추가 결과</summary>
-    public static string EnqueueSummaryTitle => Get(nameof(EnqueueSummaryTitle));
-
     /// <summary>새로 추가 {0}건 · 다시 넣음 {1}건 · 이미 완료 {2}건 · 변경 없음 {3}건 · 건너뜀 {4}건</summary>
     public static string EnqueueSummaryFormat => Get(nameof(EnqueueSummaryFormat));
 
@@ -1357,4 +1354,10 @@ public static partial class Strings
 
     /// <summary>재생목록에 넣기 ▾</summary>
     public static string AddToPlaylistButton => Get(nameof(AddToPlaylistButton));
+
+    /// <summary>커뮤니티</summary>
+    public static string AboutCommunityLabel => Get(nameof(AboutCommunityLabel));
+
+    /// <summary>디스코드</summary>
+    public static string DiscordMenuItem => Get(nameof(DiscordMenuItem));
 }

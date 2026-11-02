@@ -13,6 +13,7 @@
             <conv:JobStageToTextConverter x:Key="JobStageToText" />
             <conv:JobStatusToBrushConverter x:Key="JobStatusToBrush" />
             <conv:JobStatusToProgressBrushConverter x:Key="JobStatusToProgressBrush" />
+            <conv:TreeIndentConverter x:Key="TreeIndent" />
             <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
             <conv:InverseBooleanConverter x:Key="InverseBoolean" />

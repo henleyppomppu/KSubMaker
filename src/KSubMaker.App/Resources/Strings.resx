@@ -434,9 +434,6 @@
   <data name="ProbingFilesFormat" xml:space="preserve">
     <value>파일 정보를 확인하는 중입니다... ({0}/{1})</value>
   </data>
-  <data name="EnqueueSummaryTitle" xml:space="preserve">
-    <value>작업 추가 결과</value>
-  </data>
   <data name="EnqueueSummaryRemovedFormat" xml:space="preserve">
     <value> · 목록에서 뺌 {0}건</value>
   </data>
@@ -1399,5 +1396,11 @@
   </data>
   <data name="AddToPlaylistButton" xml:space="preserve">
     <value>재생목록에 넣기 ▾</value>
+  </data>
+  <data name="AboutCommunityLabel" xml:space="preserve">
+    <value>커뮤니티</value>
+  </data>
+  <data name="DiscordMenuItem" xml:space="preserve">
+    <value>디스코드</value>
   </data>
 </root>

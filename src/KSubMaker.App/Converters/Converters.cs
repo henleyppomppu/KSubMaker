@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using KSubMaker.App.Resources;
@@ -86,6 +87,28 @@ public sealed class JobStageToTextConverter : OneWayConverter
 /// The brushes are frozen: an unfrozen brush handed to thousands of virtualised rows keeps a
 /// per-element change-notification subscription alive and shows up as scroll stutter.
 /// </summary>
+/// <summary>
+/// Left indent of a tree row, by its depth. The row template draws its own highlight across the
+/// full width, so the indentation has to be inside the row rather than the stock nested margin.
+/// </summary>
+public sealed class TreeIndentConverter : OneWayConverter
+{
+    private const double Step = 14d;
+
+    public override object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var depth = 0;
+        var parent = value is DependencyObject item ? ItemsControl.ItemsControlFromItemContainer(item) : null;
+        while (parent is TreeViewItem treeItem)
+        {
+            depth++;
+            parent = ItemsControl.ItemsControlFromItemContainer(treeItem);
+        }
+
+        return new Thickness(depth * Step, 0, 0, 0);
+    }
+}
+
 /// <summary>
 /// Fill colour of the 진행 bar: blue while running, green when done, red on failure, amber when
 /// paused, grey for waiting (including audio prepared ahead), cancelled and skipped.

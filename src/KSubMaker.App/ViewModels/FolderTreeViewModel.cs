@@ -26,16 +26,18 @@ public sealed class FolderTreeViewModel
     /// <summary>Fills <see cref="Roots"/> with the ready drives. Safe to call once at startup.</summary>
     public async Task LoadDrivesAsync()
     {
+        // VolumeLabel is read here, off the UI thread, for the same reason IsReady is: a network
+        // drive can take its time answering either.
         var drives = await Task.Run(() =>
             DriveInfo.GetDrives()
                 .Where(IsUsable)
-                .Select(d => d.RootDirectory.FullName)
+                .Select(d => (Path: d.RootDirectory.FullName, Name: DriveName(d), Kind: DriveKind(d)))
                 .ToArray()).ConfigureAwait(true);
 
         Roots.Clear();
         foreach (var drive in drives)
         {
-            Roots.Add(new FolderNodeViewModel(this, drive, drive.TrimEnd('\\', '/')));
+            Roots.Add(new FolderNodeViewModel(this, drive.Path, drive.Name, drive.Kind));
         }
     }
 
@@ -118,6 +120,28 @@ public sealed class FolderTreeViewModel
             || target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>"볼륨 이름 (Z:)", as Explorer shows it; just "(Z:)" when the label cannot be read.</summary>
+    private static string DriveName(DriveInfo drive)
+    {
+        var letter = drive.Name.TrimEnd('\\', '/');
+        try
+        {
+            var label = drive.VolumeLabel;
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                return $"{label} ({letter})";
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return drive.DriveType == DriveType.Fixed ? $"로컬 디스크 ({letter})" : $"({letter})";
+    }
+
+    private static FolderNodeKind DriveKind(DriveInfo drive) =>
+        drive.DriveType == DriveType.Network ? FolderNodeKind.NetworkDrive : FolderNodeKind.Drive;
+
     private static bool IsUsable(DriveInfo drive)
     {
         try
@@ -150,17 +174,30 @@ public sealed partial class FolderNodeViewModel : ObservableObject
         Name = string.Empty;
     }
 
-    public FolderNodeViewModel(FolderTreeViewModel tree, string fullPath, string name)
+    public FolderNodeViewModel(FolderTreeViewModel tree, string fullPath, string name, FolderNodeKind kind = FolderNodeKind.Folder)
     {
         _tree = tree;
         FullPath = fullPath;
         Name = name;
+        Kind = kind;
         Children.Add(Placeholder);
     }
 
     public string FullPath { get; }
 
     public string Name { get; }
+
+    public FolderNodeKind Kind { get; }
+
+    /// <summary>Segoe MDL2 Assets glyph for the row's icon.</summary>
+    public string Glyph => Kind switch
+    {
+        FolderNodeKind.Drive => "\uEDA2",
+        FolderNodeKind.NetworkDrive => "\uE8CE",
+        _ => "\uE8B7"
+    };
+
+    public bool IsDrive => Kind != FolderNodeKind.Folder;
 
     public ObservableCollection<FolderNodeViewModel> Children { get; } = [];
 
@@ -217,4 +254,12 @@ public sealed partial class FolderNodeViewModel : ObservableObject
             return [];
         }
     }
+}
+
+/// <summary>What a tree row stands for; picks its icon.</summary>
+public enum FolderNodeKind
+{
+    Folder,
+    Drive,
+    NetworkDrive
 }

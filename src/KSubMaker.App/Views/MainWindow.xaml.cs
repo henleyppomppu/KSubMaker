@@ -62,6 +62,8 @@ public partial class MainWindow : Window
     /// signature; the view model wraps its own work in try/catch, so the only thing to guard here
     /// is the payload extraction.
     /// </summary>
+    private void OnOpenDiscord(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Discord);
+
     /// <summary>
     /// A button that opens its own context menu on a left click — 재생목록에 넣기 ▾. The menu is
     /// rebuilt each time: the playlists, then 새 재생목록에 넣기… — a static ItemsSource cannot mix a

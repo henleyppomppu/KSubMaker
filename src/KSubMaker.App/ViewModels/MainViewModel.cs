@@ -352,12 +352,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Bumped per navigation; a navigation that waited on a scan gives up if a newer one started.</summary>
     private int _navigation;
 
-    /// <summary>
-    /// True while a scan runs because the user moved to a folder. Its result goes to the status bar
-    /// only — a dialog on every click in the tree was in the way. 목록 새로고침 still shows it.
-    /// </summary>
-    private bool _quietScan;
-
     private bool CanStart => !IsQueueRunning && !IsScanning && !IsPreparingModels;
 
     private bool CanCancelModelPreparation => IsPreparingModels;
@@ -537,15 +531,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _quietScan = true;
-        try
-        {
-            await ScanAsync().ConfigureAwait(true);
-        }
-        finally
-        {
-            _quietScan = false;
-        }
+        await ScanAsync().ConfigureAwait(true);
     }
 
     private static bool IsDriveRoot(string folder)
@@ -635,17 +621,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             };
 
             // ScanAsync already hops onto the thread pool; awaiting it keeps the UI live.
+            var timer = System.Diagnostics.Stopwatch.StartNew();
             var report = await _scanService.ScanAsync(request, cts.Token).ConfigureAwait(true);
+            var listed = timer.Elapsed;
 
             var removedCount = await RemoveVanishedAsync(cts.Token).ConfigureAwait(true);
 
             if (report.Files.Count == 0)
             {
                 StatusMessage = Strings.ScanNoFilesFound;
-                if (!_quietScan)
-                {
-                    _dialogs.ShowInformation(Strings.ScanNoFilesFound);
-                }
                 return;
             }
 
@@ -657,8 +641,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 report.Elapsed.TotalSeconds);
 
             var results = await _queue.EnqueueAsync(report.Files, settings, cts.Token).ConfigureAwait(true);
+            var enqueued = timer.Elapsed;
 
             await ProbeNewlyQueuedAsync(report.Files, results, cts.Token).ConfigureAwait(true);
+
+            // Where a slow folder spends its time. Only new files are probed, once each: jobs are
+            // kept across restarts and across folder switches, so a second visit skips that part.
+            _logger.LogInformation(
+                "폴더 검색 {Folder}: 영상 {Files}개 — 목록 {Listed:0.0}초, 등록 {Enqueued:0.0}초, 파일 정보 확인 {Probed}개 {Probing:0.0}초",
+                folder,
+                report.Files.Count,
+                listed.TotalSeconds,
+                (enqueued - listed).TotalSeconds,
+                results.Count(r => r.Decision is EnqueueDecision.Created or EnqueueDecision.Requeued),
+                (timer.Elapsed - enqueued).TotalSeconds);
 
             ShowEnqueueSummary(results, removedCount);
 
@@ -963,11 +959,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             summary += string.Format(CultureInfo.CurrentCulture, Strings.EnqueueSummaryRemovedFormat, removed);
         }
 
+        // The status bar, not a dialog: a scan runs on every folder switch, and a box to click away
+        // each time was in the way.
         StatusMessage = summary;
-        if (!_quietScan)
-        {
-            _dialogs.ShowInformation(summary, Strings.EnqueueSummaryTitle);
-        }
     }
 
     private async Task<AppSettings> PersistScanOptionsAsync(string folder, CancellationToken cancellationToken)
