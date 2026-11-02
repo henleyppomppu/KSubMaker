@@ -2,7 +2,7 @@
 
 증상 → 원인 → 해결 순서로 정리했습니다. 오류 코드는
 `src/KSubMaker.Domain/Errors/ErrorCodes.cs`(및 거울인 `worker/ksubmaker_worker/errors.py`)의
-실제 값이며, 22개가 전부입니다.
+실제 값이며, 25개가 전부입니다.
 
 **먼저 볼 곳:** 메인 화면의 **로그 보기** 버튼 →
 `%LOCALAPPDATA%\KSubMaker\logs\ksubmaker-YYYYMMDD.log`
@@ -26,6 +26,7 @@
 | `WHISPER_MODEL_NOT_FOUND` | 음성 인식 모델이 설치되어 있지 않습니다… | 아니요 | [§4](#4-모델을-찾을-수-없다) |
 | `WHISPER_MODEL_LOAD_FAILED` | 음성 인식 모델을 불러오지 못했습니다… | 아니요 | [§4](#4-모델을-찾을-수-없다) |
 | `TRANSCRIPTION_FAILED` | 음성 인식에 실패했습니다. | 아니요 | [§11](#11-transcription_failed--음성-인식-결과가-비어-있다) |
+| `NO_SPEECH` | 음성이 없습니다. 자막으로 만들 내용이 없습니다. | 아니요 | [§11](#11-transcription_failed--음성-인식-결과가-비어-있다) — 실패가 아니라 상태 **음성 없음**(건너뜀)으로 표시됩니다 |
 | `TRANSLATION_MODEL_NOT_FOUND` | 번역 모델이 설치되어 있지 않습니다… | 아니요 | [§4](#4-모델을-찾을-수-없다) |
 | `TRANSLATION_FAILED` | 번역에 실패했습니다. | 아니요 | [§12](#12-translation_failed--로컬-llm-엔진이-시작되지-않는다) |
 | `INVALID_TRANSLATION_RESPONSE` | 번역 결과 형식이 올바르지 않아 해당 구간을 다시 시도했습니다. | **예** | [§13](#13-invalid_translation_response--번역-결과-형식-오류) |
@@ -408,7 +409,7 @@ $env:PYTHONPATH = "worker"
 
 | 원인 | 해결 |
 | --- | --- |
-| 영상 전체가 무음 또는 배경음만 | VAD 필터가 전부 걸러냈습니다. 설정 → 음성 인식에서 **VAD 필터를 끄고** 다시 시도 |
+| 영상 전체가 무음 또는 배경음만 | 이제 `TRANSCRIPTION_FAILED`가 아니라 **`NO_SPEECH`** 로 보고되고, 실패가 아닌 **음성 없음**(건너뜀)으로 표시되며 자동 재시도하지 않습니다. 소리가 정말 있는데 이렇게 나오면 VAD가 전부 걸러낸 것이니 설정 → 음성 인식에서 **VAD 필터를 끄고** 다시 시도하세요. 확인: `ffmpeg -i 영상 -af volumedetect -f null -` 의 `max_volume`이 -90 dB 근처면 무음입니다 |
 | 언어를 잘못 지정 | 설정 → 음성 인식 → 원본 언어를 `auto`로 |
 | `phase=translate`인데 인식 체크포인트가 없음 | 처리 방식을 A(파일 단위 순차)로 바꾸고 다시 시도. 또는 캐시를 비우고 처음부터 |
 | 내장 자막 트랙이 이미지 기반(PGS/VobSub) | `parse_srt`가 읽지 못합니다. 텍스트 자막 트랙만 지원합니다. 소스 모드를 오디오로 되돌리세요 |

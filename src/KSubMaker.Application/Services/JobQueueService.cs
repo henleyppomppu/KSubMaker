@@ -1296,6 +1296,17 @@ public sealed class JobQueueService : IAsyncDisposable
             var code = result.ErrorCode ?? ErrorCodes.Unknown;
             var message = result.ErrorMessage ?? UserFacingErrors.Describe(code);
 
+            if (code == ErrorCodes.NoSpeech)
+            {
+                // A silent track: nothing went wrong, there is just no subtitle to make. Never
+                // retried (the same silence comes back), never counted as a failure.
+                _logger.LogInformation("음성이 없어 만들 자막이 없습니다: {JobId}", job.Id);
+                job.MarkNothingToDo(code, UserFacingErrors.Describe(code), _timeProvider);
+                await PersistQuietlyAsync(job).ConfigureAwait(false);
+                RaiseJobChanged(job);
+                return;
+            }
+
             var shouldAutoRetry = settings.AutoRetryOnRecoverableError
                                   && (result.Recoverable || ErrorCodes.IsAutoRetryable(code))
                                   && job.RetryCount == 0;

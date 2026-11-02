@@ -371,11 +371,13 @@ class Transcriber:
             total_duration = float(segments[-1]["end"])
 
         if not segments:
-            # Not an error the user can act on differently, but it must not masquerade as success:
-            # an empty transcript would silently produce an empty subtitle file.
+            # Must not masquerade as success (an empty transcript would write an empty subtitle
+            # file), but it is not a failure either: a silent track has nothing to transcribe.
+            # NO_SPEECH lets the host show "음성 없음" instead of a red 실패 — two lectures in the
+            # user's library (2026-11-02) were recordings with a -91 dB track from start to end.
             raise WorkerError(
-                errors.TRANSCRIPTION_FAILED,
-                "음성을 인식하지 못했습니다. 오디오에 말소리가 없거나 볼륨이 너무 작을 수 있습니다.",
+                errors.NO_SPEECH,
+                errors.describe(errors.NO_SPEECH),
                 detail=f"whisper returned no segments for {audio_path}",
             )
 

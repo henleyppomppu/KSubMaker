@@ -364,14 +364,16 @@ def test_cancellation_stops_mid_stream(tmp_path: Path) -> None:
         transcriber.transcribe(audio, token=token, on_progress=cancel_after_two)
 
 
-def test_an_empty_transcript_is_an_error_not_an_empty_success(tmp_path: Path) -> None:
-    # An empty result would silently produce an empty subtitle file.
+def test_an_empty_transcript_is_no_speech_not_an_empty_success(tmp_path: Path) -> None:
+    # An empty result would silently produce an empty subtitle file — but a silent track is not a
+    # failure either, so it gets its own code the host shows as 음성 없음.
     transcriber, audio = _prepared(FakeModel([]), tmp_path)
 
     with pytest.raises(errors.WorkerError) as excinfo:
         transcriber.transcribe(audio)
 
-    assert excinfo.value.code == errors.TRANSCRIPTION_FAILED
+    assert excinfo.value.code == errors.NO_SPEECH
+    assert excinfo.value.recoverable is False, "retrying a silent track finds the same silence"
 
 
 def test_a_missing_audio_file_is_an_error(tmp_path: Path) -> None:

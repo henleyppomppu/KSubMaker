@@ -383,6 +383,9 @@
   <data name="SelectAllHeader" xml:space="preserve">
     <value>전체</value>
   </data>
+  <data name="JobStatusNoSpeech" xml:space="preserve">
+    <value>음성 없음</value>
+  </data>
   <data name="JobStatusPaused" xml:space="preserve">
     <value>일시정지</value>
   </data>
