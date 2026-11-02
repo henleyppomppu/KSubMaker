@@ -559,17 +559,35 @@
                 <!-- 감지 언어 -->
                 <DataGridTextColumn Header="{x:Static res:Strings.ColumnDetectedLanguage}"
                                     Binding="{Binding DetectedLanguage, Converter={StaticResource EmptyToDash}}"
-                                    Width="86" />
+                                    Width="86">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
 
                 <!-- 모델 -->
                 <DataGridTextColumn Header="{x:Static res:Strings.ColumnModel}"
                                     Binding="{Binding Model, Converter={StaticResource EmptyToDash}}"
-                                    Width="160" />
+                                    Width="160">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
 
                 <!-- 자막 원본: the per-file override, "기본(음성 인식)" until the user changes it. -->
                 <DataGridTextColumn Header="{x:Static res:Strings.ColumnSubtitleSource}"
                                     Binding="{Binding SubtitleSourceText}"
-                                    Width="118" />
+                                    Width="118">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
 
                 <!-- 결과 경로는 열 대신 행 툴팁으로: 대개 원본 옆이라 240px를 쓸 값이 아님. "결과 폴더 열기"가 직접 연다. -->
 
