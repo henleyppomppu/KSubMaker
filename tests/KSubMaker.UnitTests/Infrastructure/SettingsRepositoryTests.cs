@@ -29,6 +29,7 @@ public sealed class SettingsRepositoryTests : IDisposable
         LastFolder = "/영상 보관함/2026",
         IncludeSubfolders = false,
         IncludeHiddenFolders = true,
+        HideCompletedJobs = true,
         ReprocessCompleted = true,
         RetryFailedOnly = true,
 

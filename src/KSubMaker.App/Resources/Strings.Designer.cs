@@ -117,6 +117,9 @@ public static partial class Strings
 
     /// <summary>숨김 폴더 포함</summary>
     public static string IncludeHiddenFoldersLabel => Get(nameof(IncludeHiddenFoldersLabel));
+    public static string HideCompletedMenuItem => Get(nameof(HideCompletedMenuItem));
+    public static string HiddenCompletedFormat => Get(nameof(HiddenCompletedFormat));
+    public static string HiddenCompletedTooltip => Get(nameof(HiddenCompletedTooltip));
 
     /// <summary>이미 한국어 자막이 있으면 건너뛰기</summary>
     public static string SkipIfKoreanSubtitleLabel => Get(nameof(SkipIfKoreanSubtitleLabel));

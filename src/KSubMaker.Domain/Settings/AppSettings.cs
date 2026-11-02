@@ -10,6 +10,9 @@ public sealed class AppSettings
     public string LastFolder { get; set; } = string.Empty;
     public bool IncludeSubfolders { get; set; } = true;
     public bool IncludeHiddenFolders { get; set; }
+
+    /// <summary>보기 → 완료 항목 숨기기: completed rows stay in the queue but off the list.</summary>
+    public bool HideCompletedJobs { get; set; }
     public bool ReprocessCompleted { get; set; }
     public bool RetryFailedOnly { get; set; }
 

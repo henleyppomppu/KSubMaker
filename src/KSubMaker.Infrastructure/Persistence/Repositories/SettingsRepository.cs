@@ -60,6 +60,7 @@ public sealed class SettingsRepository(
         settings.LastFolder = GetString(rows, nameof(settings.LastFolder), settings.LastFolder);
         settings.IncludeSubfolders = GetBool(rows, nameof(settings.IncludeSubfolders), settings.IncludeSubfolders);
         settings.IncludeHiddenFolders = GetBool(rows, nameof(settings.IncludeHiddenFolders), settings.IncludeHiddenFolders);
+        settings.HideCompletedJobs = GetBool(rows, nameof(settings.HideCompletedJobs), settings.HideCompletedJobs);
         settings.ReprocessCompleted = GetBool(rows, nameof(settings.ReprocessCompleted), settings.ReprocessCompleted);
         settings.RetryFailedOnly = GetBool(rows, nameof(settings.RetryFailedOnly), settings.RetryFailedOnly);
 
@@ -187,6 +188,7 @@ public sealed class SettingsRepository(
             [nameof(s.LastFolder)] = s.LastFolder,
             [nameof(s.IncludeSubfolders)] = Write(s.IncludeSubfolders),
             [nameof(s.IncludeHiddenFolders)] = Write(s.IncludeHiddenFolders),
+            [nameof(s.HideCompletedJobs)] = Write(s.HideCompletedJobs),
             [nameof(s.ReprocessCompleted)] = Write(s.ReprocessCompleted),
             [nameof(s.RetryFailedOnly)] = Write(s.RetryFailedOnly),
 

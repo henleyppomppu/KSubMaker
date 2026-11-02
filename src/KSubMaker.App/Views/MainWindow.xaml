@@ -97,6 +97,10 @@
                 <MenuItem Header="{x:Static res:Strings.IncludeHiddenFoldersLabel}"
                           IsCheckable="True"
                           IsChecked="{Binding IncludeHiddenFolders}" />
+                <Separator />
+                <MenuItem Header="{x:Static res:Strings.HideCompletedMenuItem}"
+                          IsCheckable="True"
+                          IsChecked="{Binding HideCompleted}" />
             </MenuItem>
             <MenuItem Header="{x:Static res:Strings.MenuJobs}">
                 <MenuItem Header="{x:Static res:Strings.RetryButton}" Command="{Binding RetryCommand}" />
@@ -526,6 +530,15 @@
                         Style="{StaticResource ToolButton}"
                         Margin="8,0,0,0" />
             </StackPanel>
+            <!-- completed rows kept off the list: say so, and one click shows them again -->
+            <Button DockPanel.Dock="Right"
+                    Content="{Binding HiddenCompletedText}"
+                    Command="{Binding ShowCompletedCommand}"
+                    ToolTip="{x:Static res:Strings.HiddenCompletedTooltip}"
+                    Style="{StaticResource ToolButton}"
+                    Foreground="#6B7280"
+                    Margin="8,0,0,0"
+                    Visibility="{Binding HasHiddenCompleted, Converter={StaticResource BoolToVisibility}}" />
             <TextBlock Text="{Binding ViewTitle}"
                        FontWeight="SemiBold"
                        TextTrimming="CharacterEllipsis"

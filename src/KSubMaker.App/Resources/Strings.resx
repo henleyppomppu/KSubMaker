@@ -140,6 +140,15 @@
   <data name="IncludeHiddenFoldersLabel" xml:space="preserve">
     <value>숨김 폴더 포함</value>
   </data>
+  <data name="HideCompletedMenuItem" xml:space="preserve">
+    <value>완료 항목 숨기기</value>
+  </data>
+  <data name="HiddenCompletedFormat" xml:space="preserve">
+    <value>완료 {0}개 숨김</value>
+  </data>
+  <data name="HiddenCompletedTooltip" xml:space="preserve">
+    <value>누르면 완료 항목을 다시 보여 줍니다 (보기 → 완료 항목 숨기기)</value>
+  </data>
   <data name="SkipIfKoreanSubtitleLabel" xml:space="preserve">
     <value>이미 한국어 자막이 있으면 건너뛰기</value>
   </data>

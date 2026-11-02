@@ -188,6 +188,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _includeHiddenFolders;
 
+    /// <summary>
+    /// 보기 → 완료 항목 숨기기. A view setting, not an action: the jobs stay in the queue and in their
+    /// playlists, only their rows leave the screen — including a job that finishes while it is on.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHiddenCompleted))]
+    private bool _hideCompleted;
+
+    partial void OnHideCompletedChanged(bool value)
+    {
+        ApplyView();
+
+        // Equal to the live setting means ApplySettings is echoing a save back.
+        if (value == _settings.HideCompletedJobs)
+        {
+            return;
+        }
+
+        var updated = _settingsService.Current;
+        updated.HideCompletedJobs = value;
+        _ = PersistHideCompletedAsync(updated);
+    }
+
+    private async Task PersistHideCompletedAsync(AppSettings updated)
+    {
+        try
+        {
+            await _settingsService.SaveAsync(updated).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "완료 항목 숨기기 설정을 저장하지 못했습니다.");
+        }
+    }
+
+    /// <summary>Completed jobs of the current view kept off the screen by <see cref="HideCompleted"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HiddenCompletedText))]
+    [NotifyPropertyChangedFor(nameof(HasHiddenCompleted))]
+    private int _hiddenCompletedCount;
+
+    /// <summary>Shown beside the view title so rows never vanish without a word.</summary>
+    public bool HasHiddenCompleted => HideCompleted && HiddenCompletedCount > 0;
+
+    public string HiddenCompletedText =>
+        string.Format(CultureInfo.CurrentCulture, Strings.HiddenCompletedFormat, HiddenCompletedCount);
+
+    [RelayCommand]
+    private void ShowCompleted() => HideCompleted = false;
+
 
     // -----------------------------------------------------------------------
     // Queue / status
@@ -781,7 +831,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             else
             {
                 // Dropped files from another folder are queued but belong to that folder's view.
-                var hidden = results.Count(r => r.Job is { } job && !IsVisible(job));
+                var hidden = results.Count(r => r.Job is { } job && !IsInView(job));
                 if (hidden > 0)
                 {
                     StatusMessage += string.Format(CultureInfo.CurrentCulture, Strings.DropHiddenElsewhereFormat, hidden);
@@ -916,7 +966,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<int> RemoveVanishedAsync(CancellationToken cancellationToken)
     {
-        var drop = QueueListReconciler.DropOnRefresh(_queue.Jobs.Where(IsVisible), File.Exists);
+        var drop = QueueListReconciler.DropOnRefresh(_queue.Jobs.Where(IsInView), File.Exists);
         if (drop.Count == 0)
         {
             return 0;
@@ -1378,7 +1428,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task RemoveCompletedAsync()
     {
-        var completed = Jobs.Where(j => j.Status == JobStatus.Completed).Select(j => j.Id).ToArray();
+        // Hidden completed rows count too: they belong to this view, just not on screen.
+        var completed = _rowsById.Values
+            .Where(r => r.Status == JobStatus.Completed && IsInView(r.Id, r.FullPath))
+            .Select(r => r.Id)
+            .ToArray();
         if (completed.Length == 0)
         {
             StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.RemoveCompletedDoneFormat, 0);
@@ -2260,6 +2314,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         List<(Job Job, JobRowViewModel Row)>? newRows = null;
+        var reappeared = false;
 
         // One drain can carry hundreds of status changes, so the command re-evaluation each of them
         // triggers is folded into the single pass at the end.
@@ -2275,6 +2330,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 if (_rowsById.TryGetValue(id, out var row))
                 {
                     row.Update(job);
+
+                    // With 완료 항목 숨기기 on, a job finishing leaves the screen; one retried comes back.
+                    if (HideCompleted && IsInView(job))
+                    {
+                        var onScreen = Jobs.Contains(row);
+                        if (onScreen && !IsVisible(job))
+                        {
+                            row.IsSelected = false;
+                            if (ReferenceEquals(SelectedJob, row))
+                            {
+                                SelectedJob = null;
+                            }
+
+                            Jobs.Remove(row);
+                        }
+                        else if (!onScreen && IsVisible(job))
+                        {
+                            reappeared = true;
+                        }
+                    }
+
                     continue;
                 }
 
@@ -2304,6 +2380,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             RecalculateCounters();
         });
+
+        // Rare (a hidden job retried from elsewhere), so the whole view is rebuilt to keep queue order.
+        if (reappeared)
+        {
+            ApplyView();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -2343,9 +2425,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether <paramref name="job"/> belongs on screen in the current view.</summary>
     private bool IsVisible(Job job) =>
+        IsInView(job) && !(HideCompleted && job.Status == JobStatus.Completed);
+
+    /// <summary>Whether <paramref name="job"/> belongs to the viewed folder or playlist, shown or hidden.</summary>
+    private bool IsInView(Job job) => IsInView(job.Id, job.VideoPath);
+
+    private bool IsInView(string jobId, string videoPath) =>
         _viewPlaylistId is { } playlistId
-            ? _playlists.Contains(playlistId, job.Id)
-            : _listFolder is null || QueueListReconciler.IsInFolder(job.VideoPath, _listFolder, IncludeSubfolders);
+            ? _playlists.Contains(playlistId, jobId)
+            : _listFolder is null || QueueListReconciler.IsInFolder(videoPath, _listFolder, IncludeSubfolders);
 
     /// <summary>
     /// Puts the current view's rows on screen, in queue order. Rows leaving the screen are unchecked:
@@ -2413,10 +2501,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        TotalCount = Jobs.Count;
+        // Hidden completed rows are still this view's jobs, so the counts keep them.
+        var hidden = HideCompleted
+            ? _rowsById.Values.Count(r => r.Status == JobStatus.Completed && IsInView(r.Id, r.FullPath))
+            : 0;
+        HiddenCompletedCount = hidden;
+
+        TotalCount = Jobs.Count + hidden;
         PendingCount = pending;
         RunningCount = running;
-        CompletedCount = completed;
+        CompletedCount = completed + hidden;
         FailedCount = failed;
     }
 
@@ -2432,6 +2526,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         IncludeSubfolders = settings.IncludeSubfolders;
         IncludeHiddenFolders = settings.IncludeHiddenFolders;
+        HideCompleted = settings.HideCompletedJobs;
         SelectedPostQueueAction = settings.PostQueueAction;
 
         // A value the user set before this ran under the old "테스트 모드" setting carries over as the
