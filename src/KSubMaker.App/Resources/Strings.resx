@@ -1446,12 +1446,51 @@
     <value>▶ 재생</value>
   </data>
   <data name="OpenSubtitleHoverButton" xml:space="preserve">
-    <value>자막 열기</value>
+    <value>자막 보기</value>
   </data>
   <data name="SubtitleFileNotFoundMessage" xml:space="preserve">
     <value>자막 파일을 찾지 못했습니다. 옮겨졌거나 지워졌을 수 있습니다.</value>
   </data>
   <data name="SelectAllTooltip" xml:space="preserve">
     <value>전체 선택 / 해제</value>
+  </data>
+  <data name="SubtitleEditorTitleFormat" xml:space="preserve">
+    <value>자막 보기 · {0}</value>
+  </data>
+  <data name="SubtitleEditorHint" xml:space="preserve">
+    <value>시간은 바꿀 수 없고 자막 글자만 고칠 수 있습니다. 글자를 모두 지운 줄은 저장할 때 빠집니다.</value>
+  </data>
+  <data name="SubtitleColumnStart" xml:space="preserve">
+    <value>시작</value>
+  </data>
+  <data name="SubtitleColumnEnd" xml:space="preserve">
+    <value>끝</value>
+  </data>
+  <data name="SubtitleColumnText" xml:space="preserve">
+    <value>자막</value>
+  </data>
+  <data name="SubtitleLoadedFormat" xml:space="preserve">
+    <value>자막 {0}줄</value>
+  </data>
+  <data name="SubtitleSavedFormat" xml:space="preserve">
+    <value>저장했습니다. (자막 {0}줄)</value>
+  </data>
+  <data name="SubtitleLoadFailedFormat" xml:space="preserve">
+    <value>자막을 읽지 못했습니다: {0}</value>
+  </data>
+  <data name="SubtitleSaveFailedFormat" xml:space="preserve">
+    <value>자막을 저장하지 못했습니다: {0}</value>
+  </data>
+  <data name="SubtitleUnsavedConfirm" xml:space="preserve">
+    <value>저장하지 않은 변경이 있습니다. 저장하고 닫을까요? (아니요를 누르면 변경을 버리고 닫습니다)</value>
+  </data>
+  <data name="SubtitleNotReadyMessage" xml:space="preserve">
+    <value>아직 만들어진 자막이 없습니다. 완료된 항목에서 볼 수 있습니다.</value>
+  </data>
+  <data name="OpenInDefaultAppButton" xml:space="preserve">
+    <value>기본 프로그램으로 열기</value>
+  </data>
+  <data name="ViewSubtitleMenuItem" xml:space="preserve">
+    <value>자막 보기</value>
   </data>
 </root>

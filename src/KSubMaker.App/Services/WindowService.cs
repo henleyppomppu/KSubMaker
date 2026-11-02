@@ -26,6 +26,28 @@ public sealed class WindowService(IServiceProvider services) : IWindowService
         return window.ShowDialog() == true;
     }
 
+    public bool ShowSubtitleEditor(string subtitlePath)
+    {
+        var viewModel = new ViewModels.SubtitleEditorViewModel(
+            subtitlePath,
+            _services.GetRequiredService<KSubMaker.Application.Abstractions.ISubtitleWriter>(),
+            _services.GetRequiredService<IShellService>(),
+            _services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ViewModels.SubtitleEditorViewModel>>());
+
+        if (!viewModel.Load())
+        {
+            _services.GetRequiredService<IDialogService>().ShowError(viewModel.StatusMessage);
+            return false;
+        }
+
+        var window = new SubtitleEditorWindow(viewModel, _services.GetRequiredService<IDialogService>())
+        {
+            Owner = ActiveOwner()
+        };
+        window.Show();
+        return true;
+    }
+
     public void ShowModels()
     {
         var window = _services.GetRequiredService<ModelsWindow>();

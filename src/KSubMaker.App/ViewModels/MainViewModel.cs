@@ -1837,20 +1837,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Opens the subtitle a finished job wrote, in the app Windows has for .srt.</summary>
+    /// <summary>자막 보기: the subtitle a finished job wrote, in the app's own viewer.</summary>
     [RelayCommand]
     private void OpenSubtitleFile(JobRowViewModel? row)
     {
         row ??= PrimaryRow();
         if (row is not { HasSubtitle: true })
         {
+            StatusMessage = Strings.SubtitleNotReadyMessage;
             return;
         }
 
-        if (!_shell.OpenFile(row.OutputPath))
+        if (!File.Exists(row.OutputPath))
         {
             StatusMessage = Strings.SubtitleFileNotFoundMessage;
+            return;
         }
+
+        _windows.ShowSubtitleEditor(row.OutputPath!);
     }
 
     /// <summary>Windows 속성 대화상자.</summary>

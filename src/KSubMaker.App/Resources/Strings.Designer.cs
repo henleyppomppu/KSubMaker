@@ -1403,7 +1403,7 @@ public static partial class Strings
     /// <summary>▶ 재생</summary>
     public static string PlayHoverButton => Get(nameof(PlayHoverButton));
 
-    /// <summary>자막 열기</summary>
+    /// <summary>자막 보기</summary>
     public static string OpenSubtitleHoverButton => Get(nameof(OpenSubtitleHoverButton));
 
     /// <summary>자막 파일을 찾지 못했습니다. 옮겨졌거나 지워졌을 수 있습니다.</summary>
@@ -1411,4 +1411,43 @@ public static partial class Strings
 
     /// <summary>전체 선택 / 해제</summary>
     public static string SelectAllTooltip => Get(nameof(SelectAllTooltip));
+
+    /// <summary>자막 보기 · {0}</summary>
+    public static string SubtitleEditorTitleFormat => Get(nameof(SubtitleEditorTitleFormat));
+
+    /// <summary>시간은 바꿀 수 없고 자막 글자만 고칠 수 있습니다. 글자를 모두 지운 줄은 저장할 때 빠집니다.</summary>
+    public static string SubtitleEditorHint => Get(nameof(SubtitleEditorHint));
+
+    /// <summary>시작</summary>
+    public static string SubtitleColumnStart => Get(nameof(SubtitleColumnStart));
+
+    /// <summary>끝</summary>
+    public static string SubtitleColumnEnd => Get(nameof(SubtitleColumnEnd));
+
+    /// <summary>자막</summary>
+    public static string SubtitleColumnText => Get(nameof(SubtitleColumnText));
+
+    /// <summary>자막 {0}줄</summary>
+    public static string SubtitleLoadedFormat => Get(nameof(SubtitleLoadedFormat));
+
+    /// <summary>저장했습니다. (자막 {0}줄)</summary>
+    public static string SubtitleSavedFormat => Get(nameof(SubtitleSavedFormat));
+
+    /// <summary>자막을 읽지 못했습니다: {0}</summary>
+    public static string SubtitleLoadFailedFormat => Get(nameof(SubtitleLoadFailedFormat));
+
+    /// <summary>자막을 저장하지 못했습니다: {0}</summary>
+    public static string SubtitleSaveFailedFormat => Get(nameof(SubtitleSaveFailedFormat));
+
+    /// <summary>저장하지 않은 변경이 있습니다. 저장하고 닫을까요? (아니요를 누르면 변경을 버리고 닫습니다)</summary>
+    public static string SubtitleUnsavedConfirm => Get(nameof(SubtitleUnsavedConfirm));
+
+    /// <summary>아직 만들어진 자막이 없습니다. 완료된 항목에서 볼 수 있습니다.</summary>
+    public static string SubtitleNotReadyMessage => Get(nameof(SubtitleNotReadyMessage));
+
+    /// <summary>기본 프로그램으로 열기</summary>
+    public static string OpenInDefaultAppButton => Get(nameof(OpenInDefaultAppButton));
+
+    /// <summary>자막 보기</summary>
+    public static string ViewSubtitleMenuItem => Get(nameof(ViewSubtitleMenuItem));
 }

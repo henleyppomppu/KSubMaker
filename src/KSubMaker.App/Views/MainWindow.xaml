@@ -473,12 +473,23 @@
                     </ListBox.ContextMenu>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <DockPanel Margin="2,1">
+                            <DockPanel Margin="4,3">
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="&#xE8FD;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="13"
+                                           Foreground="#3B7DDD"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0" />
                                 <TextBlock DockPanel.Dock="Right"
                                            Text="{Binding Count}"
-                                           Foreground="Gray"
+                                           Foreground="#8A94A3"
+                                           VerticalAlignment="Center"
                                            Margin="8,0,0,0" />
-                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Name}"
+                                           Foreground="#1F2733"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
                             </DockPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -599,6 +610,9 @@
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <MenuItem Header="{x:Static res:Strings.PlayMenuItem}"
                               Command="{Binding PlacementTarget.DataContext.OpenVideoFileCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="{x:Static res:Strings.ViewSubtitleMenuItem}"
+                              Command="{Binding PlacementTarget.DataContext.OpenSubtitleFileCommand,
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <MenuItem Header="{x:Static res:Strings.RetryButton}"
                               Command="{Binding PlacementTarget.DataContext.RetryCommand,
@@ -909,6 +923,7 @@
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="VerticalAlignment" Value="Center" />
+                            <Setter Property="HorizontalAlignment" Value="Center" />
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
