@@ -373,6 +373,9 @@ public static partial class Strings
     /// <summary>폴더 변경을 취소했습니다. 목록은 그대로입니다.</summary>
     public static string FolderChangeCancelledMessage => Get(nameof(FolderChangeCancelledMessage));
 
+    /// <summary>음성 없음</summary>
+    public static string JobStatusNoSpeech => Get(nameof(JobStatusNoSpeech));
+
     /// <summary>일시정지</summary>
     public static string JobStatusPaused => Get(nameof(JobStatusPaused));
 

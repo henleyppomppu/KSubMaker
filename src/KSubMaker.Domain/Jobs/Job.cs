@@ -184,6 +184,29 @@ public sealed class Job
         ProcessingSpeed = 0d;
     }
 
+    /// <summary>
+    /// The run finished without anything to write — a silent audio track — and that is not a failure.
+    /// Parked as <see cref="JobStatus.Skipped"/> with <paramref name="reasonCode"/> kept in
+    /// <see cref="ErrorCode"/> so the grid can say why (음성 없음) instead of a red 실패. Forced like
+    /// <see cref="MarkFailed"/>: the state machine only admits Skipped from Pending, and this arrives
+    /// from an active stage.
+    /// </summary>
+    public void MarkNothingToDo(string reasonCode, string message, TimeProvider? timeProvider = null)
+    {
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+
+        Status = JobStatus.Skipped;
+        CurrentStage = JobStage.Done;
+        OverallProgress = 100d;
+        StageProgress = 100d;
+        ErrorCode = reasonCode;
+        ErrorMessage = message;
+        CompletedAtUtc = now;
+        UpdatedAtUtc = now;
+        EstimatedTimeRemaining = null;
+        ProcessingSpeed = 0d;
+    }
+
     public void EnterStage(JobStage stage, TimeProvider? timeProvider = null)
     {
         TransitionTo(JobStateMachine.StatusForStage(stage), timeProvider);

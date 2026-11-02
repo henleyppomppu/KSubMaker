@@ -28,6 +28,9 @@ CUDA_OUT_OF_MEMORY: Final = "CUDA_OUT_OF_MEMORY"
 WHISPER_MODEL_NOT_FOUND: Final = "WHISPER_MODEL_NOT_FOUND"
 WHISPER_MODEL_LOAD_FAILED: Final = "WHISPER_MODEL_LOAD_FAILED"
 TRANSCRIPTION_FAILED: Final = "TRANSCRIPTION_FAILED"
+#: The audio decoded fine and Whisper ran, but there is nothing to transcribe: a silent track.
+#: Not a failure — there is simply no subtitle to make — so the host shows it as 음성 없음.
+NO_SPEECH: Final = "NO_SPEECH"
 TRANSLATION_MODEL_NOT_FOUND: Final = "TRANSLATION_MODEL_NOT_FOUND"
 TRANSLATION_FAILED: Final = "TRANSLATION_FAILED"
 INVALID_TRANSLATION_RESPONSE: Final = "INVALID_TRANSLATION_RESPONSE"
@@ -55,6 +58,7 @@ ALL: Final[tuple[str, ...]] = (
     WHISPER_MODEL_NOT_FOUND,
     WHISPER_MODEL_LOAD_FAILED,
     TRANSCRIPTION_FAILED,
+    NO_SPEECH,
     TRANSLATION_MODEL_NOT_FOUND,
     TRANSLATION_FAILED,
     INVALID_TRANSLATION_RESPONSE,
@@ -105,6 +109,7 @@ DEFAULT_MESSAGES: Final[dict[str, str]] = {
     WHISPER_MODEL_NOT_FOUND: "음성 인식 모델을 찾을 수 없습니다. 모델 화면에서 먼저 내려받으세요.",
     WHISPER_MODEL_LOAD_FAILED: "음성 인식 모델을 불러오지 못했습니다.",
     TRANSCRIPTION_FAILED: "음성 인식에 실패했습니다.",
+    NO_SPEECH: "음성이 없습니다. 자막으로 만들 내용이 없습니다.",
     TRANSLATION_MODEL_NOT_FOUND: "번역 모델을 찾을 수 없습니다. 모델 화면에서 먼저 내려받으세요.",
     TRANSLATION_FAILED: "번역에 실패했습니다.",
     INVALID_TRANSLATION_RESPONSE: "번역 결과 형식이 올바르지 않습니다.",

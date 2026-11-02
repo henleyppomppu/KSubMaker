@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using KSubMaker.App.Resources;
 using KSubMaker.App.Services;
+using KSubMaker.Domain.Errors;
 using KSubMaker.Domain.Jobs;
 
 namespace KSubMaker.App.ViewModels;
@@ -79,6 +81,11 @@ public sealed partial class JobRowViewModel : ObservableObject
     [ObservableProperty]
     private string? _errorMessage;
 
+    /// <summary>Kept so 상태 can tell a silent track (음성 없음) from an ordinary 건너뜀.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    private string? _errorCode;
+
     /// <summary>Free-text 메모 column; edited through the row's right-click menu.</summary>
     [ObservableProperty]
     private string? _note;
@@ -117,7 +124,9 @@ public sealed partial class JobRowViewModel : ObservableObject
     /// information the separate 현재 단계 column used to carry.
     /// </summary>
     public string StatusSummary =>
-        Status is JobStatus.Failed or JobStatus.Paused
+        Status == JobStatus.Skipped && ErrorCode == ErrorCodes.NoSpeech
+            ? Strings.JobStatusNoSpeech
+            : Status is JobStatus.Failed or JobStatus.Paused
         && Stage is not (JobStage.None or JobStage.Done)
             ? $"{StatusText} · {StageText}까지"
             : StatusText;
@@ -169,6 +178,7 @@ public sealed partial class JobRowViewModel : ObservableObject
         Model = job.WhisperModel ?? job.TranslationModel;
         OutputPath = job.OutputPath;
         ErrorMessage = job.ErrorMessage;
+        ErrorCode = job.ErrorCode;
         Note = job.Note;
 
         SourceOverride = job.SourceOverride;
