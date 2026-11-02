@@ -64,15 +64,16 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnOpenDiscord(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Discord);
 
+    private void OnExit(object sender, RoutedEventArgs e) => Close();
+
     /// <summary>
-    /// A button that opens its own context menu on a left click — 재생목록에 넣기 ▾. The menu is
-    /// rebuilt each time: the playlists, then 새 재생목록에 넣기… — a static ItemsSource cannot mix a
-    /// bound list with a fixed item without a CompositeCollection, whose bindings do not reach the
-    /// view model from a context menu.
+    /// 작업 → 재생목록에 넣기 ▸, filled each time it opens: the playlists, then 새 재생목록에 넣기….
+    /// A bound ItemsSource cannot mix a list with a fixed item, and a submenu's popup is outside the
+    /// window's tree, where a RelativeSource binding back to the view model does not reliably resolve.
     /// </summary>
-    private void OnDropDownButtonClick(object sender, RoutedEventArgs e)
+    private void OnPlaylistSubmenuOpened(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { ContextMenu: { } menu } button)
+        if (sender is not MenuItem menu || !ReferenceEquals(e.OriginalSource, menu))
         {
             return;
         }
@@ -98,10 +99,6 @@ public partial class MainWindow : Window
             Header = KSubMaker.App.Resources.Strings.AddToNewPlaylistMenuItem,
             Command = _viewModel.AddToNewPlaylistCommand
         });
-
-        menu.PlacementTarget = button;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        menu.IsOpen = true;
     }
 
     /// <summary>

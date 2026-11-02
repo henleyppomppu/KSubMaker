@@ -104,6 +104,19 @@ public sealed class FolderTreeViewModel
         }
     }
 
+    /// <summary>
+    /// Re-reads every folder the tree has already listed, keeping what is expanded and selected:
+    /// folders made since appear, deleted ones go. Collapsed folders just forget their children and
+    /// list them again when next opened.
+    /// </summary>
+    public async Task RefreshAsync()
+    {
+        foreach (var root in Roots.ToArray())
+        {
+            await root.RefreshAsync().ConfigureAwait(true);
+        }
+    }
+
     internal void OnNodeSelected(FolderNodeViewModel node)
     {
         _selected = node;
@@ -225,6 +238,60 @@ public sealed partial class FolderNodeViewModel : ObservableObject
 
     /// <summary>Lists the subfolders once. Hidden and system folders are left out, as in Explorer.</summary>
     public Task EnsureChildrenAsync() => _loading ??= LoadChildrenAsync();
+
+    /// <summary>See <see cref="FolderTreeViewModel.RefreshAsync"/>.</summary>
+    internal async Task RefreshAsync()
+    {
+        if (_loading is null)
+        {
+            return;
+        }
+
+        if (!IsExpanded)
+        {
+            // Listed before but closed now: drop the stale list, read it again on the next open.
+            _loading = null;
+            Children.Clear();
+            Children.Add(Placeholder);
+            return;
+        }
+
+        var paths = await Task.Run(() => ListSubfolders(FullPath)).ConfigureAwait(true);
+        var keep = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
+
+        for (var i = Children.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(Children[i].FullPath))
+            {
+                Children.RemoveAt(i);
+            }
+        }
+
+        // Existing nodes are kept (with their own expansion); new folders are inserted in order.
+        for (var i = 0; i < paths.Length; i++)
+        {
+            if (i < Children.Count && string.Equals(Children[i].FullPath, paths[i], StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var existing = Children.FirstOrDefault(c => string.Equals(c.FullPath, paths[i], StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                Children.Remove(existing);
+                Children.Insert(i, existing);
+            }
+            else
+            {
+                Children.Insert(i, new FolderNodeViewModel(_tree!, paths[i], Path.GetFileName(paths[i])));
+            }
+        }
+
+        foreach (var child in Children.ToArray())
+        {
+            await child.RefreshAsync().ConfigureAwait(true);
+        }
+    }
 
     private async Task LoadChildrenAsync()
     {

@@ -112,12 +112,6 @@ public static partial class Strings
     /// <summary>KSubMaker · 한국어 자막 생성기</summary>
     public static string MainWindowTitle => Get(nameof(MainWindowTitle));
 
-    /// <summary>대상 폴더</summary>
-    public static string TargetFolderLabel => Get(nameof(TargetFolderLabel));
-
-    /// <summary>폴더 선택</summary>
-    public static string SelectFolderButton => Get(nameof(SelectFolderButton));
-
     /// <summary>하위 폴더 포함</summary>
     public static string IncludeSubfoldersLabel => Get(nameof(IncludeSubfoldersLabel));
 
@@ -126,12 +120,6 @@ public static partial class Strings
 
     /// <summary>이미 한국어 자막이 있으면 건너뛰기</summary>
     public static string SkipIfKoreanSubtitleLabel => Get(nameof(SkipIfKoreanSubtitleLabel));
-
-    /// <summary>목록 새로고침</summary>
-    public static string ScanButton => Get(nameof(ScanButton));
-
-    /// <summary>폴더를 다시 검색해 새 영상은 넣고, 자막 여부를 다시 확인하고, 지워진 영상은 뺍니다. 작업 중에도 할 수 있습니다.</summary>
-    public static string ScanHint => Get(nameof(ScanHint));
 
     /// <summary>검색 중단</summary>
     public static string ScanCancelButton => Get(nameof(ScanCancelButton));
@@ -1352,12 +1340,36 @@ public static partial class Strings
     /// <summary>작업 중인 폴더로</summary>
     public static string ReturnToRunningViewButton => Get(nameof(ReturnToRunningViewButton));
 
-    /// <summary>재생목록에 넣기 ▾</summary>
-    public static string AddToPlaylistButton => Get(nameof(AddToPlaylistButton));
-
     /// <summary>커뮤니티</summary>
     public static string AboutCommunityLabel => Get(nameof(AboutCommunityLabel));
 
     /// <summary>디스코드</summary>
     public static string DiscordMenuItem => Get(nameof(DiscordMenuItem));
+
+    /// <summary>파일</summary>
+    public static string MenuFile => Get(nameof(MenuFile));
+
+    /// <summary>보기</summary>
+    public static string MenuView => Get(nameof(MenuView));
+
+    /// <summary>작업</summary>
+    public static string MenuJobs => Get(nameof(MenuJobs));
+
+    /// <summary>도구</summary>
+    public static string MenuTools => Get(nameof(MenuTools));
+
+    /// <summary>도움말</summary>
+    public static string MenuHelp => Get(nameof(MenuHelp));
+
+    /// <summary>폴더 열기…</summary>
+    public static string OpenFolderMenuItem => Get(nameof(OpenFolderMenuItem));
+
+    /// <summary>새로고침</summary>
+    public static string RefreshMenuItem => Get(nameof(RefreshMenuItem));
+
+    /// <summary>목록과 폴더 트리를 다시 읽습니다. 지운 영상은 빠지고, 새로 생긴 자막도 확인합니다. (F5)</summary>
+    public static string RefreshTooltip => Get(nameof(RefreshTooltip));
+
+    /// <summary>끝내기</summary>
+    public static string ExitMenuItem => Get(nameof(ExitMenuItem));
 }

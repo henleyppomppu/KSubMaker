@@ -202,14 +202,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
-    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyPropertyChangedFor(nameof(CanReturnToRunningView))]
     private QueueState _queueStatus = QueueState.Idle;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
-    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyCanExecuteChangedFor(nameof(CancelScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
@@ -225,7 +223,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
-    [NotifyPropertyChangedFor(nameof(CanEditFolder))]
     [NotifyCanExecuteChangedFor(nameof(CancelModelPreparationCommand))]
     private bool _isPreparingModels;
 
@@ -333,12 +330,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool CanBrowseFolder => !IsScanning && !IsPreparingModels;
 
     private bool CanCancelScan => IsScanning;
-
-    /// <summary>
-    /// Whether the folder text box takes input. Changing folder only changes the view, so a running
-    /// queue does not lock it; a scan in flight does, because the scan reads the box.
-    /// </summary>
-    public bool CanEditFolder => !IsScanning && !IsPreparingModels;
 
     /// <summary>
     /// The folder the grid is showing. Null only before any folder was ever opened, and then every
@@ -531,7 +522,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await ScanAsync().ConfigureAwait(true);
+        await ScanFolderAsync().ConfigureAwait(true);
     }
 
     private static bool IsDriveRoot(string folder)
@@ -578,6 +569,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync()
+    {
+        // 새로고침 (F5, 파일 메뉴, the ⟳ above the list): the tree is re-read too, so a folder made
+        // or deleted in Explorer shows up. Moving to a folder does not need that and skips it.
+        _ = FolderTree.RefreshAsync();
+        await ScanFolderAsync().ConfigureAwait(true);
+    }
+
+    private async Task ScanFolderAsync()
     {
         if (_viewPlaylistId is { } playlistId)
         {

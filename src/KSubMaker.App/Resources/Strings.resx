@@ -134,12 +134,6 @@
   <data name="MainWindowTitle" xml:space="preserve">
     <value>KSubMaker · 한국어 자막 생성기</value>
   </data>
-  <data name="TargetFolderLabel" xml:space="preserve">
-    <value>대상 폴더</value>
-  </data>
-  <data name="SelectFolderButton" xml:space="preserve">
-    <value>폴더 선택</value>
-  </data>
   <data name="IncludeSubfoldersLabel" xml:space="preserve">
     <value>하위 폴더 포함</value>
   </data>
@@ -148,12 +142,6 @@
   </data>
   <data name="SkipIfKoreanSubtitleLabel" xml:space="preserve">
     <value>이미 한국어 자막이 있으면 건너뛰기</value>
-  </data>
-  <data name="ScanButton" xml:space="preserve">
-    <value>목록 새로고침</value>
-  </data>
-  <data name="ScanHint" xml:space="preserve">
-    <value>폴더를 다시 검색해 새 영상은 넣고, 자막 여부를 다시 확인하고, 지워진 영상은 뺍니다. 작업 중에도 할 수 있습니다.</value>
   </data>
   <data name="ScanCancelButton" xml:space="preserve">
     <value>검색 중단</value>
@@ -1394,13 +1382,37 @@
   <data name="ReturnToRunningViewButton" xml:space="preserve">
     <value>작업 중인 폴더로</value>
   </data>
-  <data name="AddToPlaylistButton" xml:space="preserve">
-    <value>재생목록에 넣기 ▾</value>
-  </data>
   <data name="AboutCommunityLabel" xml:space="preserve">
     <value>커뮤니티</value>
   </data>
   <data name="DiscordMenuItem" xml:space="preserve">
     <value>디스코드</value>
+  </data>
+  <data name="MenuFile" xml:space="preserve">
+    <value>파일</value>
+  </data>
+  <data name="MenuView" xml:space="preserve">
+    <value>보기</value>
+  </data>
+  <data name="MenuJobs" xml:space="preserve">
+    <value>작업</value>
+  </data>
+  <data name="MenuTools" xml:space="preserve">
+    <value>도구</value>
+  </data>
+  <data name="MenuHelp" xml:space="preserve">
+    <value>도움말</value>
+  </data>
+  <data name="OpenFolderMenuItem" xml:space="preserve">
+    <value>폴더 열기…</value>
+  </data>
+  <data name="RefreshMenuItem" xml:space="preserve">
+    <value>새로고침</value>
+  </data>
+  <data name="RefreshTooltip" xml:space="preserve">
+    <value>목록과 폴더 트리를 다시 읽습니다. 지운 영상은 빠지고, 새로 생긴 자막도 확인합니다. (F5)</value>
+  </data>
+  <data name="ExitMenuItem" xml:space="preserve">
+    <value>끝내기</value>
   </data>
 </root>

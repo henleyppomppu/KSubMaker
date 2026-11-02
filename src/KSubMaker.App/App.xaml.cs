@@ -43,12 +43,34 @@ public partial class App : System.Windows.Application
     private bool _errorDialogVisible;
 
     /// <summary>
+    /// Menus and drop-downs open to the right of what was clicked, as on an ordinary desktop.
+    ///
+    /// Windows' pen/touch handedness setting (태블릿 PC 설정 → 오른손잡이) flips every WPF menu to
+    /// open leftward — on the user's PC the 도구 menu appeared to the left of its own header. WPF
+    /// reads the setting once into a private static field with no public setter; clearing that field
+    /// is the standard workaround. Best effort: if a future WPF renames it, menus stay as Windows says.
+    /// </summary>
+    private static void OpenMenusRightward()
+    {
+        if (!SystemParameters.MenuDropAlignment)
+        {
+            return;
+        }
+
+        var field = typeof(SystemParameters).GetField(
+            "_menuDropAlignment",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        field?.SetValue(null, false);
+    }
+
+    /// <summary>
     /// <see cref="async void"/> is unavoidable for a framework override; every path is wrapped so an
     /// exception here can never reach the CLR's unhandled-exception handler.
     /// </summary>
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        OpenMenusRightward();
 
         if (!TryAcquireSingleInstance())
         {

@@ -13,6 +13,11 @@
         FontFamily="Malgun Gothic"
         FontSize="12">
 
+    <Window.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding ScanCommand}" />
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding BrowseFolderCommand}" />
+    </Window.InputBindings>
+
     <DockPanel LastChildFill="True">
 
         <!-- ======================= status bar ======================= -->
@@ -72,90 +77,60 @@
 
         <!-- App-level navigation lives in the menu bar, not among the queue buttons: 설정 · 모델 관리 ·
              로그 보기 are not things you do to the list. Each item runs its command directly. -->
+        <!-- Everything that is not run control lives here (and in the row's right-click menu), so
+             the chrome above the list is one row: 실행. -->
         <Menu DockPanel.Dock="Top" Padding="4,2">
-            <MenuItem Header="{x:Static res:Strings.SettingsButton}" Command="{Binding OpenSettingsCommand}" />
-            <MenuItem Header="{x:Static res:Strings.ModelsButton}" Command="{Binding OpenModelsCommand}" />
-            <MenuItem Header="{x:Static res:Strings.OpenLogButton}" Command="{Binding OpenLogWindowCommand}" />
-            <MenuItem Header="{x:Static res:Strings.DiscordMenuItem}"
-                      ToolTip="{x:Static svc:AppLinks.Discord}"
-                      Click="OnOpenDiscord" />
+            <MenuItem Header="{x:Static res:Strings.MenuFile}">
+                <MenuItem Header="{x:Static res:Strings.OpenFolderMenuItem}"
+                          Command="{Binding BrowseFolderCommand}"
+                          InputGestureText="Ctrl+O" />
+                <MenuItem Header="{x:Static res:Strings.RefreshMenuItem}"
+                          Command="{Binding ScanCommand}"
+                          InputGestureText="F5" />
+                <Separator />
+                <MenuItem Header="{x:Static res:Strings.ExitMenuItem}" Click="OnExit" />
+            </MenuItem>
+            <MenuItem Header="{x:Static res:Strings.MenuView}">
+                <MenuItem Header="{x:Static res:Strings.IncludeSubfoldersLabel}"
+                          IsCheckable="True"
+                          IsChecked="{Binding IncludeSubfolders}" />
+                <MenuItem Header="{x:Static res:Strings.IncludeHiddenFoldersLabel}"
+                          IsCheckable="True"
+                          IsChecked="{Binding IncludeHiddenFolders}" />
+            </MenuItem>
+            <MenuItem Header="{x:Static res:Strings.MenuJobs}">
+                <MenuItem Header="{x:Static res:Strings.RetryButton}" Command="{Binding RetryCommand}" />
+                <MenuItem Header="{x:Static res:Strings.CancelJobButton}" Command="{Binding CancelJobsCommand}" />
+                <MenuItem Header="{Binding RemoveSelectedCaption}" Command="{Binding RemoveSelectedCommand}" />
+                <MenuItem Header="{x:Static res:Strings.RemoveCompletedButton}" Command="{Binding RemoveCompletedCommand}" />
+                <Separator />
+                <MenuItem Header="{x:Static res:Strings.SubtitleSourceMenuItem}" Command="{Binding ChooseSubtitleSourceCommand}" />
+                <!-- filled when opened: the playlists, then 새 재생목록에 넣기… (see OnPlaylistSubmenuOpened) -->
+                <MenuItem Header="{x:Static res:Strings.AddToPlaylistMenuItem}" SubmenuOpened="OnPlaylistSubmenuOpened">
+                    <MenuItem Header="…" />
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{x:Static res:Strings.OpenOutputFolderButton}" Command="{Binding OpenOutputFolderCommand}" />
+                <MenuItem Header="{x:Static res:Strings.OpenSourceFolderButton}" Command="{Binding OpenSourceFolderCommand}" />
+            </MenuItem>
+            <MenuItem Header="{x:Static res:Strings.MenuTools}">
+                <MenuItem Header="{x:Static res:Strings.SettingsButton}" Command="{Binding OpenSettingsCommand}" />
+                <MenuItem Header="{x:Static res:Strings.ModelsButton}" Command="{Binding OpenModelsCommand}" />
+                <MenuItem Header="{x:Static res:Strings.OpenLogButton}" Command="{Binding OpenLogWindowCommand}" />
+            </MenuItem>
+            <MenuItem Header="{x:Static res:Strings.MenuHelp}">
+                <MenuItem Header="{x:Static res:Strings.DiscordMenuItem}"
+                          ToolTip="{x:Static svc:AppLinks.Discord}"
+                          Click="OnOpenDiscord" />
+            </MenuItem>
         </Menu>
 
-        <!-- =======================================================================
-             Top chrome, top to bottom: the target folder + scan options on one row,
-             a scan-progress row that collapses when idle, then the command bar. The
-             command bar used to be a fifteen-button WrapPanel docked to the bottom
-             where it competed with the status bar and gave 시작 no more weight than
-             로그 보기; it now sits above the grid it acts on, split into labelled
-             groups.
-             ======================================================================= -->
+        <!-- Top chrome: just 실행. Folder choice is the tree, the rest is in the menus. -->
         <Border DockPanel.Dock="Top"
                 Background="{StaticResource ChromeBackground}"
                 BorderBrush="{StaticResource ChromeBorder}"
                 BorderThickness="0,0,0,1">
             <StackPanel>
-
-                <!-- target folder + scan options: the box takes ~3/5, the trailing star column is
-                     the spacer that stops it stretching the full width -->
-                <Grid Margin="12,9,12,7">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="3*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="2*" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Column="0"
-                               Text="{x:Static res:Strings.TargetFolderLabel}"
-                               Style="{StaticResource LabelText}" />
-
-                    <TextBox Grid.Column="1"
-                             Text="{Binding TargetFolder, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding CanEditFolder}"
-                             Padding="6,5"
-                             VerticalContentAlignment="Center"
-                             ToolTip="{Binding TargetFolder}" />
-
-                    <Button Grid.Column="2"
-                            Content="{x:Static res:Strings.SelectFolderButton}"
-                            Command="{Binding BrowseFolderCommand}"
-                            Style="{StaticResource ToolButton}"
-                            Margin="8,0,0,0" />
-
-                    <Button Grid.Column="3"
-                            Content="{x:Static res:Strings.ScanButton}"
-                            Command="{Binding ScanCommand}"
-                            Style="{StaticResource ToolButton}"
-                            Margin="4,0,10,0"
-                            ToolTip="{x:Static res:Strings.ScanHint}" />
-
-                    <CheckBox Grid.Column="4"
-                              Content="{x:Static res:Strings.IncludeSubfoldersLabel}"
-                              IsChecked="{Binding IncludeSubfolders}"
-                              Style="{StaticResource OptionCheckBox}" />
-                    <CheckBox Grid.Column="5"
-                              Content="{x:Static res:Strings.IncludeHiddenFoldersLabel}"
-                              IsChecked="{Binding IncludeHiddenFolders}"
-                              Style="{StaticResource OptionCheckBox}" />
-                </Grid>
-
-                <!-- scan progress: collapses to nothing when no scan is running -->
-                <StackPanel Orientation="Horizontal"
-                            Margin="12,0,12,8"
-                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
-                    <Button Content="{x:Static res:Strings.ScanCancelButton}"
-                            Command="{Binding CancelScanCommand}"
-                            Style="{StaticResource ToolButton}" />
-
-                    <ProgressBar Width="140"
-                                 Height="6"
-                                 IsIndeterminate="True"
-                                 VerticalAlignment="Center"
-                                 Margin="8,0,0,0" />
-                </StackPanel>
 
                 <!-- command bar: each group is a card — its label at the top, its buttons below -->
                 <WrapPanel Orientation="Horizontal" Margin="12,4,12,2">
@@ -238,7 +213,7 @@
                       </StackPanel>
                     </Border>
 
-                    <!-- 목록 -->
+                    <!-- 목록: the actions used often enough to keep a click away (also in 작업 and the row menu) -->
                     <Border Style="{StaticResource GroupCard}">
                       <StackPanel>
                         <TextBlock Text="목록" Style="{StaticResource GroupCaption}" />
@@ -254,41 +229,6 @@
                                     Style="{StaticResource ToolButton}" />
                             <Button Content="{x:Static res:Strings.RemoveCompletedButton}"
                                     Command="{Binding RemoveCompletedCommand}"
-                                    Style="{StaticResource ToolButton}" />
-                        </StackPanel>
-                      </StackPanel>
-                    </Border>
-
-                    <!-- 선택 -->
-                    <Border Style="{StaticResource GroupCard}">
-                      <StackPanel>
-                        <TextBlock Text="선택" Style="{StaticResource GroupCaption}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="{x:Static res:Strings.SubtitleSourceMenuItem}"
-                                    Command="{Binding ChooseSubtitleSourceCommand}"
-                                    Style="{StaticResource ToolButton}" />
-                            <!-- 재생목록에 넣기: opens the same choices as the row menu (see OnDropDownButtonClick) -->
-                            <Button Content="{x:Static res:Strings.AddToPlaylistButton}"
-                                    Click="OnDropDownButtonClick"
-                                    Style="{StaticResource ToolButton}">
-                                <Button.ContextMenu>
-                                    <ContextMenu />
-                                </Button.ContextMenu>
-                            </Button>
-                        </StackPanel>
-                      </StackPanel>
-                    </Border>
-
-                    <!-- 열기 -->
-                    <Border Style="{StaticResource GroupCard}" Margin="0,0,0,6">
-                      <StackPanel>
-                        <TextBlock Text="열기" Style="{StaticResource GroupCaption}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="{x:Static res:Strings.OpenOutputFolderButton}"
-                                    Command="{Binding OpenOutputFolderCommand}"
-                                    Style="{StaticResource ToolButton}" />
-                            <Button Content="{x:Static res:Strings.OpenSourceFolderButton}"
-                                    Command="{Binding OpenSourceFolderCommand}"
                                     Style="{StaticResource ToolButton}" />
                         </StackPanel>
                       </StackPanel>
@@ -512,12 +452,34 @@
                           Background="{StaticResource ChromeBorder}" />
 
         <DockPanel Grid.Column="2">
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding ViewTitle}"
-                   FontWeight="SemiBold"
-                   TextTrimming="CharacterEllipsis"
-                   ToolTip="{Binding ViewTitle}"
-                   Margin="10,6,10,4" />
+        <DockPanel DockPanel.Dock="Top" Margin="12,6,12,2">
+            <Button DockPanel.Dock="Left"
+                    Command="{Binding ScanCommand}"
+                    ToolTip="{x:Static res:Strings.RefreshTooltip}"
+                    Style="{StaticResource ToolButton}"
+                    Margin="0,0,10,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="{x:Static res:Strings.RefreshMenuItem}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <!-- a scan in flight: a thin bar and 중단, only while it runs -->
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
+                <ProgressBar Width="120" Height="4" IsIndeterminate="True" VerticalAlignment="Center" />
+                <Button Content="{x:Static res:Strings.ScanCancelButton}"
+                        Command="{Binding CancelScanCommand}"
+                        Style="{StaticResource ToolButton}"
+                        Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding ViewTitle}"
+                       FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding ViewTitle}"
+                       VerticalAlignment="Center" />
+        </DockPanel>
         <controls:JobGrid ItemsSource="{Binding Jobs}"
                   SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                   AllowDrop="True"
@@ -574,6 +536,19 @@
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <MenuItem Header="{x:Static res:Strings.PlayMenuItem}"
                               Command="{Binding PlacementTarget.DataContext.OpenVideoFileCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="{x:Static res:Strings.RetryButton}"
+                              Command="{Binding PlacementTarget.DataContext.RetryCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="{x:Static res:Strings.CancelJobButton}"
+                              Command="{Binding PlacementTarget.DataContext.CancelJobsCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <Separator />
+                    <MenuItem Header="{x:Static res:Strings.OpenOutputFolderButton}"
+                              Command="{Binding PlacementTarget.DataContext.OpenOutputFolderCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="{x:Static res:Strings.OpenSourceFolderButton}"
+                              Command="{Binding PlacementTarget.DataContext.OpenSourceFolderCommand,
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <Separator />
                     <MenuItem Header="{x:Static res:Strings.NoteMenuItem}"
