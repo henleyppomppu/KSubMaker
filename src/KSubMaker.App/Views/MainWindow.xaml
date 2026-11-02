@@ -260,12 +260,6 @@
                       <StackPanel>
                         <TextBlock Text="선택" Style="{StaticResource GroupCaption}" />
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="{x:Static res:Strings.SelectAllButton}"
-                                    Command="{Binding SelectAllCommand}"
-                                    Style="{StaticResource ToolButton}" />
-                            <Button Content="{x:Static res:Strings.ClearSelectionButton}"
-                                    Command="{Binding ClearSelectionCommand}"
-                                    Style="{StaticResource ToolButton}" />
                             <Button Content="{x:Static res:Strings.SubtitleSourceMenuItem}"
                                     Command="{Binding ChooseSubtitleSourceCommand}"
                                     Style="{StaticResource ToolButton}" />
@@ -403,7 +397,16 @@
             <DataGrid.Columns>
 
                 <!-- 선택 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnSelected}" SortMemberPath="IsSelected" Width="52">
+                <DataGridTemplateColumn CanUserSort="False" Width="60">
+                    <DataGridTemplateColumn.Header>
+                        <!-- Select all / none, not a sort: see MainViewModel.AllChecked. -->
+                        <CheckBox IsChecked="{Binding DataContext.AllChecked, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
+                                  Content="{x:Static res:Strings.SelectAllHeader}"
+                                  VerticalContentAlignment="Center"
+                                  ToolTip="{x:Static res:Strings.ColumnSelected}"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                    </DataGridTemplateColumn.Header>
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

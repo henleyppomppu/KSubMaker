@@ -194,12 +194,6 @@
   <data name="ModelsButton" xml:space="preserve">
     <value>모델 관리</value>
   </data>
-  <data name="SelectAllButton" xml:space="preserve">
-    <value>전체 선택</value>
-  </data>
-  <data name="ClearSelectionButton" xml:space="preserve">
-    <value>선택 해제</value>
-  </data>
   <data name="ColumnSelected" xml:space="preserve">
     <value>선택</value>
   </data>
@@ -385,6 +379,9 @@
   </data>
   <data name="JobStatusSkipped" xml:space="preserve">
     <value>건너뜀</value>
+  </data>
+  <data name="SelectAllHeader" xml:space="preserve">
+    <value>전체</value>
   </data>
   <data name="JobStatusPaused" xml:space="preserve">
     <value>일시정지</value>

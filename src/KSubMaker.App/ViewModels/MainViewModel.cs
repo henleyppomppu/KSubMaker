@@ -1570,11 +1570,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // Commands: selection helpers and shell integration
     // -----------------------------------------------------------------------
 
-    [RelayCommand]
-    private void SelectAll() => SetAllChecked(true);
+    /// <summary>
+    /// The 선택 column header's check box: checked when every row is, empty when none is, and the
+    /// in-between mark otherwise. Clicking it checks everything, or clears everything when all were
+    /// already checked — the header used to sort by the check mark instead, which nobody needs.
+    /// </summary>
+    public bool? AllChecked
+    {
+        get
+        {
+            var any = false;
+            var all = true;
 
-    [RelayCommand]
-    private void ClearSelection() => SetAllChecked(false);
+            foreach (var row in Jobs)
+            {
+                if (row.IsSelected)
+                {
+                    any = true;
+                }
+                else
+                {
+                    all = false;
+                }
+
+                if (any && !all)
+                {
+                    return null;
+                }
+            }
+
+            return any && all;
+        }
+        set => SetAllChecked(value == true);
+    }
 
     private void SetAllChecked(bool value) => BatchSelectionChange(() =>
     {
@@ -2364,6 +2392,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OpenOutputFolderCommand.NotifyCanExecuteChanged();
         OpenSourceFolderCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(StartButtonCaption));
+        OnPropertyChanged(nameof(AllChecked));
     }
 
     /// <summary>
