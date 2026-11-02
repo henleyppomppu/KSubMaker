@@ -246,8 +246,24 @@ class Worker:
     # job thread
     # -----------------------------------------------------------------------
 
+    #: How long a new job waits for the previous job thread to finish unwinding. The host sends the
+    #: next ``process`` the moment it reads ``completed`` — 8ms later on 2026-11-02 — but the thread
+    #: that emitted it still has its ``finally`` blocks and return ahead of it. Refusing in that
+    #: window failed two healthy files in 0.0s each with PROTOCOL_ERROR ("이미 실행 중인 작업이
+    #: 있습니다"), right after a job that finished in 1.1s because its subtitle already existed.
+    #: A job that is genuinely still running is refused exactly as before, just this much later.
+    JOB_HANDOFF_GRACE_SECONDS: float = 5.0
+
     def _start_job(self, command: Mapping[str, Any], body: Any, *, job_id: str) -> None:
         request_id = command.get("requestId")
+
+        with self._job_lock:
+            previous = self._job_thread
+
+        if previous is not None and previous.is_alive():
+            # Outside the lock: the finishing thread does not need it, but a cancel arriving on
+            # another path must not be held up behind this wait.
+            previous.join(self.JOB_HANDOFF_GRACE_SECONDS)
 
         with self._job_lock:
             if self._job_thread is not None and self._job_thread.is_alive():
