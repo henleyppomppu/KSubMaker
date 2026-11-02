@@ -70,9 +70,51 @@ public sealed partial class MainViewModel
         ApplyView();
     }
 
+    /// <summary>The folder or playlist the current run was started from.</summary>
+    private string? _runFolder;
+    private string? _runPlaylistId;
+
+    /// <summary>
+    /// 작업 중인 폴더로 shows while a run is going and the user is looking somewhere else.
+    /// </summary>
+    public bool CanReturnToRunningView =>
+        IsQueueRunning
+        && (_runPlaylistId is { } runPlaylist
+            ? !string.Equals(runPlaylist, _viewPlaylistId, StringComparison.Ordinal)
+            : _runFolder is { } runFolder
+              && (_viewPlaylistId is not null || !QueueListReconciler.IsSameFolder(runFolder, _listFolder)));
+
+    /// <summary>Tooltip of 작업 중인 폴더로: where it goes.</summary>
+    public string RunningViewTitle =>
+        _runPlaylistId is { } id
+            ? string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.ViewTitlePlaylistFormat,
+                Playlists.FirstOrDefault(p => p.Id == id)?.Name ?? string.Empty)
+            : string.Format(CultureInfo.CurrentCulture, Strings.ViewTitleFolderFormat, _runFolder ?? string.Empty);
+
+    /// <summary>Back to the running folder or playlist. Shown as it was, without a rescan.</summary>
+    [RelayCommand]
+    private void ReturnToRunningView()
+    {
+        if (_runPlaylistId is { } playlistId)
+        {
+            SelectedPlaylist = Playlists.FirstOrDefault(p => p.Id == playlistId);
+            return;
+        }
+
+        if (_runFolder is { } folder)
+        {
+            TargetFolder = folder;
+            ShowFolder(folder);
+        }
+    }
+
     /// <summary>Announces everything that depends on which kind of view is showing.</summary>
     private void OnViewChanged()
     {
+        OnPropertyChanged(nameof(CanReturnToRunningView));
+
         ViewTitle = _viewPlaylistId is { } id
             ? string.Format(
                 CultureInfo.CurrentCulture,

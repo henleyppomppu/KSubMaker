@@ -1161,6 +1161,12 @@ public sealed class JobQueueService : IAsyncDisposable
             // may legally enter either, so this is a real transition now. It used to be silently
             // skipped whenever the start status was Translating, which left the row claiming to be
             // in a stage it had already finished.
+            // Pass 2 continues the plan pass 1 started; everything else starts a new one.
+            if (phase != JobPhase.TranslateAndWrite)
+            {
+                job.ResetStagePlan();
+            }
+
             if (JobStateMachine.CanTransition(job.Status, startStatus))
             {
                 job.TransitionTo(startStatus, _timeProvider);
@@ -1171,6 +1177,10 @@ public sealed class JobQueueService : IAsyncDisposable
         {
             _mutationLock.Release();
         }
+
+        // Where this run's progress starts, for 남은 시간: set by the first report.
+        double? runStartProgress = null;
+        var runStartElapsed = TimeSpan.Zero;
 
         var processor = _processorSelector.Select(settings);
         var stopwatch = Stopwatch.StartNew();
@@ -1207,9 +1217,26 @@ public sealed class JobQueueService : IAsyncDisposable
             {
                 job.DetectedLanguage = update.DetectedLanguage;
                 job.LanguageProbability = update.LanguageProbability;
+
+                // The worker does not translate Korean into Korean (skipTranslationForSameLanguage,
+                // on by default). Knowing it now lets the bar fill the rest of the way smoothly
+                // instead of sitting at the end of 음성 인식 and then jumping over 번역.
+                if (string.Equals(update.DetectedLanguage, "ko", StringComparison.OrdinalIgnoreCase))
+                {
+                    job.SkipStage(JobStage.Translating);
+                }
             }
 
-            job.EstimatedTimeRemaining = ProgressCalculator.EstimateRemaining(job.OverallProgress, stopwatch.Elapsed);
+            if (runStartProgress is null)
+            {
+                runStartProgress = job.OverallProgress;
+                runStartElapsed = stopwatch.Elapsed;
+            }
+
+            job.EstimatedTimeRemaining = ProgressCalculator.EstimateRemaining(
+                job.OverallProgress,
+                stopwatch.Elapsed - runStartElapsed,
+                runStartProgress.Value);
 
             // Progress arrives many times a second; the database only needs it every couple of
             // seconds so a crash resumes from roughly the right place.

@@ -203,6 +203,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
     [NotifyPropertyChangedFor(nameof(CanEditFolder))]
+    [NotifyPropertyChangedFor(nameof(CanReturnToRunningView))]
     private QueueState _queueStatus = QueueState.Idle;
 
     [ObservableProperty]
@@ -350,6 +351,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Bumped per navigation; a navigation that waited on a scan gives up if a newer one started.</summary>
     private int _navigation;
+
+    /// <summary>
+    /// True while a scan runs because the user moved to a folder. Its result goes to the status bar
+    /// only — a dialog on every click in the tree was in the way. 목록 새로고침 still shows it.
+    /// </summary>
+    private bool _quietScan;
 
     private bool CanStart => !IsQueueRunning && !IsScanning && !IsPreparingModels;
 
@@ -530,7 +537,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await ScanAsync().ConfigureAwait(true);
+        _quietScan = true;
+        try
+        {
+            await ScanAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            _quietScan = false;
+        }
     }
 
     private static bool IsDriveRoot(string folder)
@@ -627,7 +642,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (report.Files.Count == 0)
             {
                 StatusMessage = Strings.ScanNoFilesFound;
-                _dialogs.ShowInformation(Strings.ScanNoFilesFound);
+                if (!_quietScan)
+                {
+                    _dialogs.ShowInformation(Strings.ScanNoFilesFound);
+                }
                 return;
             }
 
@@ -946,7 +964,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         StatusMessage = summary;
-        _dialogs.ShowInformation(summary, Strings.EnqueueSummaryTitle);
+        if (!_quietScan)
+        {
+            _dialogs.ShowInformation(summary, Strings.EnqueueSummaryTitle);
+        }
     }
 
     private async Task<AppSettings> PersistScanOptionsAsync(string folder, CancellationToken cancellationToken)
@@ -1071,7 +1092,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         runSettings = runSettings.Clone();
         runSettings.TestDurationSeconds = testDurationSeconds;
 
+        // Remembered for 작업 중인 폴더로: the view this run belongs to.
+        _runFolder = _viewPlaylistId is null ? folder : null;
+        _runPlaylistId = _viewPlaylistId;
+
         await _queue.StartAsync(runSettings, restrict, scope).ConfigureAwait(true);
+        OnPropertyChanged(nameof(CanReturnToRunningView));
+        OnPropertyChanged(nameof(RunningViewTitle));
 
         StatusMessage = testDurationSeconds > 0
             ? string.Format(CultureInfo.CurrentCulture, "테스트 실행을 시작했습니다 (앞 {0}).", DescribeTestLength(testDurationSeconds))

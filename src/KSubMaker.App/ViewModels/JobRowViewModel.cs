@@ -49,17 +49,21 @@ public sealed partial class JobRowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private JobStatus _status;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StageText))]
     [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private JobStage _stage;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OverallText))]
     private double _overallProgress;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private double _stageProgress;
 
     [ObservableProperty]
@@ -84,6 +88,7 @@ public sealed partial class JobRowViewModel : ObservableObject
     /// <summary>Kept so 상태 can tell a silent track (음성 없음) from an ordinary 건너뜀.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusSummary))]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
     private string? _errorCode;
 
     /// <summary>Free-text 메모 column; edited through the row's right-click menu.</summary>
@@ -130,6 +135,50 @@ public sealed partial class JobRowViewModel : ObservableObject
         && Stage is not (JobStage.None or JobStage.Done)
             ? $"{StatusText} · {StageText}까지"
             : StatusText;
+
+    /// <summary>
+    /// The words on the 진행 bar. The bar is the whole job (it is full only when the subtitle is
+    /// written); the words are the stage under way and how far into it — the figure that is actually
+    /// measured, and the one that shows a long 음성 인식 is still moving while the bar barely does.
+    /// Whole percents: the bar is an estimate, and a decimal point would claim otherwise.
+    /// </summary>
+    public string ProgressText
+    {
+        get
+        {
+            if (Status == JobStatus.Completed)
+            {
+                return Strings.JobStatusCompleted;
+            }
+
+            // Audio prefetched for a job still waiting its turn: done ahead, nothing running.
+            if (Status == JobStatus.Pending && Stage == JobStage.ExtractingAudio && StageProgress >= 100d)
+            {
+                return Strings.ProgressAudioReady;
+            }
+
+            // Finished without a subtitle — 음성 없음, 건너뜀: the bar is grey, the words say why.
+            if (Status == JobStatus.Skipped)
+            {
+                return StatusSummary;
+            }
+
+            if (Stage is JobStage.None or JobStage.Done)
+            {
+                return Status == JobStatus.Cancelled ? StatusText : string.Empty;
+            }
+
+            var stage = $"{StageText} {Math.Floor(StageProgress):0}%";
+
+            // Stopped part-way: say so, and where.
+            return Status is JobStatus.Failed or JobStatus.Cancelled or JobStatus.Paused
+                ? $"{StatusText} · {stage}"
+                : stage;
+        }
+    }
+
+    /// <summary>Tooltip on the 진행 bar: the whole-job figure the bar draws.</summary>
+    public string OverallText => $"전체 약 {Math.Floor(OverallProgress):0}%";
 
     /// <summary>Media seconds per wall-clock second, or "-" while nothing is running.</summary>
     public string SpeedText => DisplayText.Speed(ProcessingSpeed);

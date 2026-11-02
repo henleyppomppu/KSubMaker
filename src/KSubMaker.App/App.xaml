@@ -12,6 +12,7 @@
             <conv:JobStatusToTextConverter x:Key="JobStatusToText" />
             <conv:JobStageToTextConverter x:Key="JobStageToText" />
             <conv:JobStatusToBrushConverter x:Key="JobStatusToBrush" />
+            <conv:JobStatusToProgressBrushConverter x:Key="JobStatusToProgressBrush" />
             <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
             <conv:InverseBooleanConverter x:Key="InverseBoolean" />

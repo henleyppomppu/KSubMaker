@@ -187,11 +187,8 @@ public static partial class Strings
     /// <summary>상태</summary>
     public static string ColumnStatus => Get(nameof(ColumnStatus));
 
-    /// <summary>전체 진행률</summary>
+    /// <summary>진행</summary>
     public static string ColumnProgress => Get(nameof(ColumnProgress));
-
-    /// <summary>단계 진행률</summary>
-    public static string ColumnStageProgress => Get(nameof(ColumnStageProgress));
 
     /// <summary>남은 시간</summary>
     public static string ColumnRemaining => Get(nameof(ColumnRemaining));
@@ -1351,4 +1348,13 @@ public static partial class Strings
 
     /// <summary>재생목록 · {0}</summary>
     public static string ViewTitlePlaylistFormat => Get(nameof(ViewTitlePlaylistFormat));
+
+    /// <summary>음성 준비됨</summary>
+    public static string ProgressAudioReady => Get(nameof(ProgressAudioReady));
+
+    /// <summary>작업 중인 폴더로</summary>
+    public static string ReturnToRunningViewButton => Get(nameof(ReturnToRunningViewButton));
+
+    /// <summary>재생목록에 넣기 ▾</summary>
+    public static string AddToPlaylistButton => Get(nameof(AddToPlaylistButton));
 }

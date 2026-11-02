@@ -63,6 +63,46 @@ public partial class MainWindow : Window
     /// is the payload extraction.
     /// </summary>
     /// <summary>
+    /// A button that opens its own context menu on a left click — 재생목록에 넣기 ▾. The menu is
+    /// rebuilt each time: the playlists, then 새 재생목록에 넣기… — a static ItemsSource cannot mix a
+    /// bound list with a fixed item without a CompositeCollection, whose bindings do not reach the
+    /// view model from a context menu.
+    /// </summary>
+    private void OnDropDownButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button)
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        foreach (var playlist in _viewModel.Playlists)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = playlist.Name,
+                Command = _viewModel.AddToPlaylistCommand,
+                CommandParameter = playlist
+            });
+        }
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+        }
+
+        menu.Items.Add(new MenuItem
+        {
+            Header = KSubMaker.App.Resources.Strings.AddToNewPlaylistMenuItem,
+            Command = _viewModel.AddToNewPlaylistCommand
+        });
+
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
     /// Scrolls the selected folder into view. Selection usually comes from the view model (the tree
     /// following a folder picked elsewhere), and a bound IsSelected does not scroll on its own.
     /// </summary>

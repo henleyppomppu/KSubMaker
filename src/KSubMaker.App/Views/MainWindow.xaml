@@ -263,6 +263,14 @@
                             <Button Content="{x:Static res:Strings.SubtitleSourceMenuItem}"
                                     Command="{Binding ChooseSubtitleSourceCommand}"
                                     Style="{StaticResource ToolButton}" />
+                            <!-- 재생목록에 넣기: opens the same choices as the row menu (see OnDropDownButtonClick) -->
+                            <Button Content="{x:Static res:Strings.AddToPlaylistButton}"
+                                    Click="OnDropDownButtonClick"
+                                    Style="{StaticResource ToolButton}">
+                                <Button.ContextMenu>
+                                    <ContextMenu />
+                                </Button.ContextMenu>
+                            </Button>
                         </StackPanel>
                       </StackPanel>
                     </Border>
@@ -302,10 +310,17 @@
                 </Grid.RowDefinitions>
 
             <DockPanel Grid.Row="0">
-                <TextBlock DockPanel.Dock="Top"
-                           Text="{x:Static res:Strings.FolderTreeHeader}"
-                           FontWeight="SemiBold"
-                           Margin="10,8,10,4" />
+                <DockPanel DockPanel.Dock="Top" Margin="10,6,6,4">
+                    <Button DockPanel.Dock="Right"
+                            Content="{x:Static res:Strings.ReturnToRunningViewButton}"
+                            Command="{Binding ReturnToRunningViewCommand}"
+                            Visibility="{Binding CanReturnToRunningView, Converter={StaticResource BoolToVisibility}}"
+                            ToolTip="{Binding RunningViewTitle}"
+                            Style="{StaticResource ToolButton}" />
+                    <TextBlock Text="{x:Static res:Strings.FolderTreeHeader}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </DockPanel>
 
                 <TreeView ItemsSource="{Binding FolderTree.Roots}"
                           BorderThickness="0"
@@ -613,38 +628,22 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <!-- 진행률 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnProgress}" SortMemberPath="OverallProgress" Width="150">
+                <!-- 진행: 막대는 작업 전체(자막을 다 쓰면 그때만 가득), 글자는 지금 단계와 그 단계의 % -->
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnProgress}" SortMemberPath="OverallProgress" Width="170">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Grid VerticalAlignment="Center">
+                            <Grid VerticalAlignment="Center" ToolTip="{Binding OverallText}">
                                 <ProgressBar Minimum="0"
                                              Maximum="100"
                                              Height="16"
+                                             Foreground="{Binding Status, Converter={StaticResource JobStatusToProgressBrush}}"
                                              Value="{Binding OverallProgress, Mode=OneWay}" />
-                                <TextBlock Text="{Binding OverallProgress, Converter={StaticResource PercentToText}}"
+                                <TextBlock Text="{Binding ProgressText}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
-                                           FontSize="10" />
-                            </Grid>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-
-                <!-- 단계 진행률 -->
-                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnStageProgress}" SortMemberPath="StageProgress" Width="126">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Grid VerticalAlignment="Center">
-                                <ProgressBar Minimum="0"
-                                             Maximum="100"
-                                             Height="16"
-                                             Foreground="#5B8DEF"
-                                             Value="{Binding StageProgress, Mode=OneWay}" />
-                                <TextBlock Text="{Binding StageProgress, Converter={StaticResource PercentToText}}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           FontSize="10" />
+                                           Foreground="#1A1A1A"
+                                           FontSize="11"
+                                           FontWeight="SemiBold" />
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

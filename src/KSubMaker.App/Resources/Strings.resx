@@ -210,10 +210,7 @@
     <value>상태</value>
   </data>
   <data name="ColumnProgress" xml:space="preserve">
-    <value>전체 진행률</value>
-  </data>
-  <data name="ColumnStageProgress" xml:space="preserve">
-    <value>단계 진행률</value>
+    <value>진행</value>
   </data>
   <data name="ColumnRemaining" xml:space="preserve">
     <value>남은 시간</value>
@@ -1393,5 +1390,14 @@
   </data>
   <data name="ViewTitlePlaylistFormat" xml:space="preserve">
     <value>재생목록 · {0}</value>
+  </data>
+  <data name="ProgressAudioReady" xml:space="preserve">
+    <value>음성 준비됨</value>
+  </data>
+  <data name="ReturnToRunningViewButton" xml:space="preserve">
+    <value>작업 중인 폴더로</value>
+  </data>
+  <data name="AddToPlaylistButton" xml:space="preserve">
+    <value>재생목록에 넣기 ▾</value>
   </data>
 </root>
