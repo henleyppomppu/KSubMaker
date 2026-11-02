@@ -63,6 +63,28 @@ public sealed class RescanAlreadyDoneTests
         (await repository.FindAsync("a"))!.Status.Should().Be(JobStatus.Completed);
     }
 
+    /// <summary>
+    /// After rows were removed the count is below the highest number in use. New jobs used to be
+    /// numbered from the count and collided with existing rows (2026-11-02: 181..185 twice).
+    /// </summary>
+    [Fact]
+    public async Task New_jobs_are_numbered_after_the_highest_existing_queue_order()
+    {
+        var early = WaitingJob("a");
+        early.QueueOrder = 5;
+        var late = WaitingJob("b");
+        late.QueueOrder = 9;
+
+        var repository = new InMemoryJobRepository(early, late);
+        var queue = NewQueue(repository);
+        await queue.LoadAsync();
+
+        var file = ScannedWithKorean("c") with { ExternalSubtitlePaths = [], HasKoreanExternalSubtitle = false };
+        await queue.EnqueueAsync([file], new AppSettings());
+
+        queue.Jobs.Select(j => (j.FileName, j.QueueOrder)).Should().Equal(("a.mkv", 5), ("b.mkv", 9), ("c.mkv", 10));
+    }
+
     [Fact]
     public async Task A_brand_new_file_with_korean_is_still_inserted_as_completed()
     {

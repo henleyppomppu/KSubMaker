@@ -2061,7 +2061,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        List<JobRowViewModel>? newRows = null;
+        List<(Job Job, JobRowViewModel Row)>? newRows = null;
 
         // One drain can carry hundreds of status changes, so the command re-evaluation each of them
         // triggers is folded into the single pass at the end.
@@ -2083,12 +2083,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 var created = new JobRowViewModel(job);
                 AttachRow(created);
                 _rowsById[id] = created;
-                (newRows ??= []).Add(created);
+                (newRows ??= []).Add((job, created));
             }
 
             if (newRows is { Count: > 0 })
             {
-                Jobs.AddRange(newRows);
+                // In queue order, not in the buffer's order. The buffer is a hash map, so a scan's
+                // new rows used to land in hash order while the queue ran them by QueueOrder: the
+                // grid looked shuffled and its top row was not the one that started first. Only a
+                // restart (RebuildRows reads JobQueueService.Jobs, which is sorted) put it right.
+                Jobs.AddRange(newRows
+                    .OrderBy(n => n.Job.QueueOrder)
+                    .ThenBy(n => n.Job.CreatedAtUtc)
+                    .Select(n => n.Row)
+                    .ToList());
             }
 
             RecalculateCounters();

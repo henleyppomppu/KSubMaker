@@ -229,7 +229,11 @@ public sealed class JobQueueService : IAsyncDisposable
         var results = new List<EnqueueResult>(files.Count);
         var toAdd = new List<Job>();
         var toUpdate = new List<Job>();
-        var order = _jobs.Count;
+        // After the max, not the count: once rows have been removed (완료 항목 비우기, 목록에서 빼기)
+        // the count is below the highest number in use, and new jobs took numbers that existing rows
+        // already had — five new rows shared 181..185 with five old ones (2026-11-02). The grid put
+        // them at the bottom while the queue interleaved them, and a restart reordered both.
+        var order = _jobs.IsEmpty ? 0 : _jobs.Values.Max(j => j.QueueOrder) + 1;
 
         await _mutationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
