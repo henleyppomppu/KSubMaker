@@ -285,8 +285,48 @@
             </StackPanel>
         </Border>
 
-        <!-- ======================= job grid ======================= -->
-        <controls:JobGrid ItemsSource="{Binding Jobs}"
+        <!-- ============ folder tree | job grid ============
+             The tree only switches what the grid shows; work in other folders keeps running. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" MinWidth="160" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="400" />
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0" Background="{StaticResource ChromeBackground}">
+                <TextBlock DockPanel.Dock="Top"
+                           Text="{x:Static res:Strings.FolderTreeHeader}"
+                           FontWeight="SemiBold"
+                           Margin="10,8,10,4" />
+
+                <TreeView ItemsSource="{Binding FolderTree.Roots}"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          TreeViewItem.Selected="OnFolderTreeItemSelected">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <TextBlock Text="{Binding Name}" ToolTip="{Binding FullPath}" Padding="2,1" />
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1"
+                          Width="5"
+                          HorizontalAlignment="Stretch"
+                          ResizeBehavior="PreviousAndNext"
+                          Background="{StaticResource ChromeBorder}" />
+
+        <controls:JobGrid Grid.Column="2"
+                  ItemsSource="{Binding Jobs}"
                   SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
                   AllowDrop="True"
                   DragOver="OnQueueDragOver"
@@ -607,6 +647,7 @@
 
             </DataGrid.Columns>
         </controls:JobGrid>
+        </Grid>
 
     </DockPanel>
 </Window>

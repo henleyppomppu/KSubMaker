@@ -270,6 +270,11 @@ public sealed class BlockingJobProcessor : IJobProcessor
     /// <summary>Completes once the pump has actually entered the processor.</summary>
     public Task Started => _started.Task;
 
+    private int _calls;
+
+    /// <summary>How many times the pump entered this processor.</summary>
+    public int Calls => Volatile.Read(ref _calls);
+
     /// <summary>Lets the parked job finish. Safe to call more than once.</summary>
     public void Release() => _release.TrySetResult();
 
@@ -298,6 +303,7 @@ public sealed class BlockingJobProcessor : IJobProcessor
         IProgress<JobProgress> progress,
         CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref _calls);
         _started.TrySetResult();
 
         if (HonoursCancellation)

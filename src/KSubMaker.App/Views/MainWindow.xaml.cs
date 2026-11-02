@@ -62,6 +62,18 @@ public partial class MainWindow : Window
     /// signature; the view model wraps its own work in try/catch, so the only thing to guard here
     /// is the payload extraction.
     /// </summary>
+    /// <summary>
+    /// Scrolls the selected folder into view. Selection usually comes from the view model (the tree
+    /// following a folder picked elsewhere), and a bound IsSelected does not scroll on its own.
+    /// </summary>
+    private void OnFolderTreeItemSelected(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is TreeViewItem item)
+        {
+            item.BringIntoView();
+        }
+    }
+
     private async void OnQueueDrop(object sender, DragEventArgs e)
     {
         e.Handled = true;

@@ -130,7 +130,7 @@ public static partial class Strings
     /// <summary>목록 새로고침</summary>
     public static string ScanButton => Get(nameof(ScanButton));
 
-    /// <summary>대상 폴더를 다시 검색해 새 영상은 목록에 넣고 기존 항목의 상태를 갱신합니다.</summary>
+    /// <summary>폴더를 다시 검색해 새 영상은 넣고, 자막 여부를 다시 확인하고, 지워진 영상은 뺍니다. 작업 중에도 할 수 있습니다.</summary>
     public static string ScanHint => Get(nameof(ScanHint));
 
     /// <summary>검색 중단</summary>
@@ -364,15 +364,6 @@ public static partial class Strings
     /// <summary> · 목록에서 뺌 {0}건</summary>
     public static string EnqueueSummaryRemovedFormat => Get(nameof(EnqueueSummaryRemovedFormat));
 
-    /// <summary>다른 폴더에서 진행하던 작업 {0}건이 목록에서 빠지고 이어하기 정보도 지워집니다. 계속할까요?</summary>
-    public static string FolderChangeDropsUnfinishedFormat => Get(nameof(FolderChangeDropsUnfinishedFormat));
-
-    /// <summary>작업이 진행 중이라 폴더를 바꿀 수 없습니다. 중단하거나 작업이 끝난 뒤에 바꿔 주세요.</summary>
-    public static string FolderChangeBlockedWhileBusy => Get(nameof(FolderChangeBlockedWhileBusy));
-
-    /// <summary>폴더 변경을 취소했습니다. 목록은 그대로입니다.</summary>
-    public static string FolderChangeCancelledMessage => Get(nameof(FolderChangeCancelledMessage));
-
     /// <summary>음성 없음</summary>
     public static string JobStatusNoSpeech => Get(nameof(JobStatusNoSpeech));
 
@@ -432,9 +423,6 @@ public static partial class Strings
 
     /// <summary>새로 추가 {0}건 · 다시 넣음 {1}건 · 이미 완료 {2}건 · 변경 없음 {3}건 · 건너뜀 {4}건</summary>
     public static string EnqueueSummaryFormat => Get(nameof(EnqueueSummaryFormat));
-
-    /// <summary>작업이 실행 중일 때는 파일을 검색할 수 없습니다.</summary>
-    public static string QueueBusyCannotScan => Get(nameof(QueueBusyCannotScan));
 
     /// <summary>시작할 수 있는 작업이 없습니다. 완료·실패·취소·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
     public static string NoRunnableJobs => Get(nameof(NoRunnableJobs));
@@ -1303,4 +1291,13 @@ public static partial class Strings
 
     /// <summary>설정을 저장하지 못했습니다. 설정 화면에서 직접 선택하세요. ({0})</summary>
     public static string ModelUseAfterDownloadFailedFormat => Get(nameof(ModelUseAfterDownloadFailedFormat));
+
+    /// <summary>드라이브 전체는 자동으로 검색하지 않습니다. 하위 폴더를 고르거나 목록 새로고침을 누르세요.</summary>
+    public static string DriveRootNotScannedMessage => Get(nameof(DriveRootNotScannedMessage));
+
+    /// <summary> · {0}건은 다른 폴더에 있어 그 폴더를 열면 보입니다.</summary>
+    public static string DropHiddenElsewhereFormat => Get(nameof(DropHiddenElsewhereFormat));
+
+    /// <summary>폴더</summary>
+    public static string FolderTreeHeader => Get(nameof(FolderTreeHeader));
 }
