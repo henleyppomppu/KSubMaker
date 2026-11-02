@@ -50,6 +50,7 @@ public sealed partial class JobRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     [NotifyPropertyChangedFor(nameof(StatusSummary))]
     [NotifyPropertyChangedFor(nameof(ProgressText))]
+    [NotifyPropertyChangedFor(nameof(HasSubtitle))]
     private JobStatus _status;
 
     [ObservableProperty]
@@ -80,7 +81,11 @@ public sealed partial class JobRowViewModel : ObservableObject
     private string? _model;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSubtitle))]
     private string? _outputPath;
+
+    /// <summary>A finished job with a subtitle to open — shows 자막 열기 on hover.</summary>
+    public bool HasSubtitle => Status == JobStatus.Completed && !string.IsNullOrWhiteSpace(OutputPath);
 
     [ObservableProperty]
     private string? _errorMessage;
@@ -93,7 +98,11 @@ public sealed partial class JobRowViewModel : ObservableObject
 
     /// <summary>Free-text 메모 column; edited through the row's right-click menu.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNote))]
     private string? _note;
+
+    /// <summary>Whether 메모 has text; an empty cell shows a hint on hover instead.</summary>
+    public bool HasNote => !string.IsNullOrWhiteSpace(Note);
 
     // ---- 자막 원본 --------------------------------------------------------
 

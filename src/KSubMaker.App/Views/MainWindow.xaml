@@ -537,6 +537,7 @@
                   SelectionUnit="FullRow"
                   HeadersVisibility="Column"
                   GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#ECEEF2"
                   RowHeaderWidth="0"
                   RowHeight="26"
                   EnableRowVirtualization="True"
@@ -552,6 +553,27 @@
             <!-- Selection is a light tint, not the OS full-saturation blue: the 상태 column paints its
                  own blue/green/red text and the progress %s ride on top of the bars, all of which
                  vanish on a solid blue row. -->
+            <DataGrid.Resources>
+                <!-- A small button that shows only on the row under the mouse (열기 in a cell). -->
+                <Style x:Key="RowHoverButton" TargetType="Button">
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Padding" Value="7,0" />
+                    <Setter Property="Height" Value="20" />
+                    <Setter Property="Margin" Value="6,0,4,0" />
+                    <Setter Property="Cursor" Value="Hand" />
+                    <Setter Property="Background" Value="#FFFFFF" />
+                    <Setter Property="BorderBrush" Value="#C3CCD8" />
+                    <Setter Property="Foreground" Value="#1F2733" />
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.Resources>
+
             <DataGrid.CellStyle>
                 <Style TargetType="DataGridCell">
                     <Setter Property="BorderBrush" Value="Transparent" />
@@ -653,6 +675,9 @@
                     </Setter>
 
                     <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#F3F6FA" />
+                        </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter Property="Background" Value="#E4EEFB" />
                         </Trigger>
@@ -663,13 +688,17 @@
             <DataGrid.Columns>
 
                 <!-- 선택 -->
-                <DataGridTemplateColumn CanUserSort="False" Width="60">
+                <DataGridTemplateColumn CanUserSort="False" CanUserResize="False" Width="36">
+                    <DataGridTemplateColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        </Style>
+                    </DataGridTemplateColumn.HeaderStyle>
                     <DataGridTemplateColumn.Header>
-                        <!-- Select all / none, not a sort: see MainViewModel.AllChecked. -->
+                        <!-- Select all / none, not a sort: see MainViewModel.AllChecked. A bare box, as in
+                             mail and file lists; the word beside it read as a second control. -->
                         <CheckBox IsChecked="{Binding DataContext.AllChecked, RelativeSource={RelativeSource AncestorType=DataGrid}, Mode=TwoWay}"
-                                  Content="{x:Static res:Strings.SelectAllHeader}"
-                                  VerticalContentAlignment="Center"
-                                  ToolTip="{x:Static res:Strings.ColumnSelected}"
+                                  ToolTip="{x:Static res:Strings.SelectAllTooltip}"
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center" />
                     </DataGridTemplateColumn.Header>
@@ -692,9 +721,16 @@
                                                   Command="{Binding DataContext.OpenVideoFileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                   CommandParameter="{Binding}" />
                                 </Border.InputBindings>
-                                <TextBlock Text="{Binding FileName}"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
+                                <DockPanel LastChildFill="True">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{x:Static res:Strings.PlayHoverButton}"
+                                            Style="{StaticResource RowHoverButton}"
+                                            Command="{Binding DataContext.OpenVideoFileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}" />
+                                    <TextBlock Text="{Binding FileName}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
                             </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -710,10 +746,33 @@
                                                   Command="{Binding DataContext.EditNoteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                   CommandParameter="{Binding}" />
                                 </Border.InputBindings>
-                                <TextBlock Text="{Binding Note}"
-                                           Foreground="#5C6672"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
+                                <Grid>
+                                    <TextBlock Text="{Binding Note}"
+                                               Foreground="#5C6672"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <!-- Without this nothing says the column can be written in:
+                                         an empty cell next to the file name reads as part of it. -->
+                                    <TextBlock Text="{x:Static res:Strings.NotePlaceholder}"
+                                               Foreground="#A3ABB6"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding HasNote}" Value="False" />
+                                                            <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True" />
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                             </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -755,6 +814,43 @@
                                        VerticalAlignment="Center"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- On a finished row, hover shows 자막 열기 and a double-click opens the .srt. -->
+                <DataGridTemplateColumn Header="{x:Static res:Strings.ColumnSubtitleSource}"
+                                        SortMemberPath="SubtitleSourceText"
+                                        Width="190">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border Background="Transparent">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftDoubleClick"
+                                                  Command="{Binding DataContext.OpenSubtitleFileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                  CommandParameter="{Binding}" />
+                                </Border.InputBindings>
+                                <DockPanel LastChildFill="True">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{x:Static res:Strings.OpenSubtitleHoverButton}"
+                                            ToolTip="{Binding OutputPath}"
+                                            Command="{Binding DataContext.OpenSubtitleFileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource RowHoverButton}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSubtitle}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <TextBlock Text="{Binding SubtitleSourceText}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -829,15 +925,6 @@
                 </DataGridTextColumn>
 
                 <!-- 자막 원본: the per-file override, "기본(음성 인식)" until the user changes it. -->
-                <DataGridTextColumn Header="{x:Static res:Strings.ColumnSubtitleSource}"
-                                    Binding="{Binding SubtitleSourceText}"
-                                    Width="118">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="VerticalAlignment" Value="Center" />
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
 
                 <!-- 결과 경로는 열 대신 행 툴팁으로: 대개 원본 옆이라 240px를 쓸 값이 아님. "결과 폴더 열기"가 직접 연다. -->
 

@@ -160,9 +160,6 @@ public static partial class Strings
     /// <summary>모델 관리</summary>
     public static string ModelsButton => Get(nameof(ModelsButton));
 
-    /// <summary>선택</summary>
-    public static string ColumnSelected => Get(nameof(ColumnSelected));
-
     /// <summary>파일명</summary>
     public static string ColumnFileName => Get(nameof(ColumnFileName));
 
@@ -342,9 +339,6 @@ public static partial class Strings
 
     /// <summary>건너뜀</summary>
     public static string JobStatusSkipped => Get(nameof(JobStatusSkipped));
-
-    /// <summary>전체</summary>
-    public static string SelectAllHeader => Get(nameof(SelectAllHeader));
 
     /// <summary> · 목록에서 뺌 {0}건</summary>
     public static string EnqueueSummaryRemovedFormat => Get(nameof(EnqueueSummaryRemovedFormat));
@@ -1402,4 +1396,19 @@ public static partial class Strings
 
     /// <summary>모델 선택을 저장했습니다. 지금 도는 작업에는 적용되지 않고 다음 시작부터 적용됩니다.</summary>
     public static string ModelChoiceSavedNextRunMessage => Get(nameof(ModelChoiceSavedNextRunMessage));
+
+    /// <summary>✎ 메모 추가 (더블클릭)</summary>
+    public static string NotePlaceholder => Get(nameof(NotePlaceholder));
+
+    /// <summary>▶ 재생</summary>
+    public static string PlayHoverButton => Get(nameof(PlayHoverButton));
+
+    /// <summary>자막 열기</summary>
+    public static string OpenSubtitleHoverButton => Get(nameof(OpenSubtitleHoverButton));
+
+    /// <summary>자막 파일을 찾지 못했습니다. 옮겨졌거나 지워졌을 수 있습니다.</summary>
+    public static string SubtitleFileNotFoundMessage => Get(nameof(SubtitleFileNotFoundMessage));
+
+    /// <summary>전체 선택 / 해제</summary>
+    public static string SelectAllTooltip => Get(nameof(SelectAllTooltip));
 }

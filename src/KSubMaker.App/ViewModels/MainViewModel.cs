@@ -1837,6 +1837,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Opens the subtitle a finished job wrote, in the app Windows has for .srt.</summary>
+    [RelayCommand]
+    private void OpenSubtitleFile(JobRowViewModel? row)
+    {
+        row ??= PrimaryRow();
+        if (row is not { HasSubtitle: true })
+        {
+            return;
+        }
+
+        if (!_shell.OpenFile(row.OutputPath))
+        {
+            StatusMessage = Strings.SubtitleFileNotFoundMessage;
+        }
+    }
+
     /// <summary>Windows 속성 대화상자.</summary>
     [RelayCommand]
     private void ShowFileProperties(JobRowViewModel? row)

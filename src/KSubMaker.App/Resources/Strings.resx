@@ -182,9 +182,6 @@
   <data name="ModelsButton" xml:space="preserve">
     <value>모델 관리</value>
   </data>
-  <data name="ColumnSelected" xml:space="preserve">
-    <value>선택</value>
-  </data>
   <data name="ColumnFileName" xml:space="preserve">
     <value>파일명</value>
   </data>
@@ -364,9 +361,6 @@
   </data>
   <data name="JobStatusSkipped" xml:space="preserve">
     <value>건너뜀</value>
-  </data>
-  <data name="SelectAllHeader" xml:space="preserve">
-    <value>전체</value>
   </data>
   <data name="JobStatusNoSpeech" xml:space="preserve">
     <value>음성 없음</value>
@@ -1444,5 +1438,20 @@
   </data>
   <data name="ModelChoiceSavedNextRunMessage" xml:space="preserve">
     <value>모델 선택을 저장했습니다. 지금 도는 작업에는 적용되지 않고 다음 시작부터 적용됩니다.</value>
+  </data>
+  <data name="NotePlaceholder" xml:space="preserve">
+    <value>✎ 메모 추가 (더블클릭)</value>
+  </data>
+  <data name="PlayHoverButton" xml:space="preserve">
+    <value>▶ 재생</value>
+  </data>
+  <data name="OpenSubtitleHoverButton" xml:space="preserve">
+    <value>자막 열기</value>
+  </data>
+  <data name="SubtitleFileNotFoundMessage" xml:space="preserve">
+    <value>자막 파일을 찾지 못했습니다. 옮겨졌거나 지워졌을 수 있습니다.</value>
+  </data>
+  <data name="SelectAllTooltip" xml:space="preserve">
+    <value>전체 선택 / 해제</value>
   </data>
 </root>
