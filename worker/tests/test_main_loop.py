@@ -481,6 +481,7 @@ def test_main_registers_the_cuda_dll_directories_before_the_first_command(
         return cuda_setup.CudaSetupReport(windows=False)
 
     monkeypatch.setattr(cuda_setup, "ensure_registered", fake_register)
+    monkeypatch.setattr(main_module, "preload_native_modules", lambda: events.append("preload"))
 
     class RecordingWorker:
         def __init__(self) -> None:
@@ -499,7 +500,35 @@ def test_main_registers_the_cuda_dll_directories_before_the_first_command(
     monkeypatch.setattr(main_module, "Worker", RecordingWorker)
 
     assert main_module.main([]) == 0
-    assert events == ["register", "worker-constructed", "run"]
+    # preload after register (the DLL search path must be extended first) and before the worker
+    # reads its first command (so no job thread ever maps a native DLL).
+    assert events == ["register", "preload", "worker-constructed", "run"]
+
+
+def test_preloading_imports_the_native_modules_and_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A job thread once hung inside LoadLibrary importing numpy (2026-11-02). Importing on the main
+    thread at startup removes the window; a missing package must still not stop the worker."""
+    import builtins
+
+    from ksubmaker_worker import main as main_module
+
+    real_import = builtins.__import__
+    seen: list[str] = []
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name in main_module.PRELOADED_MODULES:
+            seen.append(name)
+            if name == "faster_whisper":
+                raise ImportError("not installed")
+            return None
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    loaded = main_module.preload_native_modules()
+
+    assert seen == list(main_module.PRELOADED_MODULES)
+    assert loaded == ["numpy", "ctranslate2"]
 
 
 # ---------------------------------------------------------------------------
