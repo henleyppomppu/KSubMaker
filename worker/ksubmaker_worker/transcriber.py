@@ -16,6 +16,7 @@ import gc
 import io
 import sys
 import time
+import wave
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -45,6 +46,23 @@ COMPUTE_DOWNGRADE: dict[str, str] = {
     "float16": "int8_float16",
     "int8_float16": "int8",
 }
+
+#: Audio longer than this is recognised in windows of :data:`WINDOW_SECONDS`.
+#:
+#: faster-whisper turns the *whole* track into one spectrogram before it decodes anything — an
+#: ``np.fft.rfft`` over every 10 ms frame, held as complex128. A 3h22m lecture asked for one 3.8 GB
+#: block and died with ``MemoryError((1, 1181453, 201), dtype('complex128'))`` (2026-11-02); an
+#: 11h36m one would need over 13 GB. A window keeps that block near 0.6 GB however long the file.
+LONG_AUDIO_SECONDS = 45 * 60
+
+#: Target window length. The actual cut moves back to the quietest moment before it.
+WINDOW_SECONDS = 30 * 60
+
+#: How far before the target the cut may move, looking for silence between words.
+CUT_SEARCH_SECONDS = 60
+
+#: Block length the quiet-spot search compares, in seconds.
+_CUT_BLOCK_SECONDS = 0.1
 
 _OOM_MARKERS = (
     "out of memory",
@@ -331,41 +349,85 @@ class Transcriber:
         _log.info("transcribing %s with options %s", source.name, options)
         started = time.monotonic()
 
-        try:
-            with _stdout_to_stderr():
-                segments_iter, info = model.transcribe(str(source), **options)
-        except Exception as exc:  # noqa: BLE001
-            raise self._translate_exception(exc, "음성 인식을 시작하지 못했습니다.") from exc
-
-        detected_language = getattr(info, "language", None) or (
-            language if language != "auto" else "en"
-        )
-        language_probability = float(getattr(info, "language_probability", 0.0) or 0.0)
-        total_duration = float(
-            duration_seconds or getattr(info, "duration", 0.0) or 0.0
-        )
-
-        if on_language is not None:
-            on_language(detected_language, language_probability)
+        windows = _plan_windows(source)
+        if windows is not None:
+            _log.info(
+                "long audio (%.0fs): recognising in %d windows", windows[-1][1] / _SAMPLE_RATE, len(windows)
+            )
 
         segments: list[dict[str, Any]] = []
+        detected_language: str | None = None
+        language_probability = 0.0
+        total_duration = float(duration_seconds or 0.0)
+        if total_duration <= 0 and windows is not None:
+            total_duration = windows[-1][1] / _SAMPLE_RATE
+        # Auto-detected language is fixed by the first window that actually held speech, so every
+        # later window is decoded in it instead of re-guessing (possibly from a silent stretch).
+        locked_language = options["language"]
 
-        try:
-            for index, segment in enumerate(segments_iter, start=1):
-                if token is not None:
-                    token.raise_if_cancelled()
+        for number, (first_frame, end_frame) in enumerate(windows or [(0, 0)]):
+            if token is not None:
+                token.raise_if_cancelled()
 
-                segments.append(_segment_to_dict(index, segment))
+            offset = first_frame / _SAMPLE_RATE
+            window_options = dict(options)
+            window_options["language"] = locked_language
+            if number > 0:
+                # The hint only ever reaches the opening window (see above); restating it at every
+                # cut would re-prime a stretch in the middle of the film.
+                window_options["initial_prompt"] = None
 
-                if on_progress is not None:
-                    end = float(getattr(segment, "end", 0.0) or 0.0)
-                    elapsed = max(1e-6, time.monotonic() - started)
-                    percent = (end / total_duration * 100.0) if total_duration > 0 else 0.0
-                    on_progress(min(100.0, max(0.0, percent)), end / elapsed)
-        except errors.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            raise self._translate_exception(exc, "음성 인식에 실패했습니다.") from exc
+            audio: Any = str(source) if windows is None else _read_window(source, first_frame, end_frame)
+
+            try:
+                with _stdout_to_stderr():
+                    segments_iter, info = model.transcribe(audio, **window_options)
+            except Exception as exc:  # noqa: BLE001
+                raise self._translate_exception(exc, "음성 인식을 시작하지 못했습니다.") from exc
+
+            if number == 0:
+                detected_language = getattr(info, "language", None) or (
+                    language if language != "auto" else "en"
+                )
+                language_probability = float(getattr(info, "language_probability", 0.0) or 0.0)
+                if total_duration <= 0:
+                    total_duration = float(getattr(info, "duration", 0.0) or 0.0)
+                if on_language is not None:
+                    on_language(detected_language, language_probability)
+
+            found_before = len(segments)
+
+            try:
+                for segment in segments_iter:
+                    if token is not None:
+                        token.raise_if_cancelled()
+
+                    entry = _segment_to_dict(len(segments) + 1, segment)
+                    if offset:
+                        _shift(entry, offset)
+                    segments.append(entry)
+
+                    if on_progress is not None:
+                        end = entry["end"]
+                        elapsed = max(1e-6, time.monotonic() - started)
+                        percent = (end / total_duration * 100.0) if total_duration > 0 else 0.0
+                        on_progress(min(100.0, max(0.0, percent)), end / elapsed)
+            except errors.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise self._translate_exception(exc, "음성 인식에 실패했습니다.") from exc
+
+            if locked_language is None and len(segments) > found_before:
+                locked_language = getattr(info, "language", None) or detected_language
+                if locked_language != detected_language:
+                    detected_language = locked_language
+                    language_probability = float(getattr(info, "language_probability", 0.0) or 0.0)
+                    if on_language is not None:
+                        on_language(detected_language, language_probability)
+
+            del audio
+            if windows is not None:
+                gc.collect()
 
         if total_duration <= 0 and segments:
             total_duration = float(segments[-1]["end"])
@@ -420,6 +482,70 @@ class Transcriber:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+_SAMPLE_RATE = 16_000
+
+
+def _plan_windows(source: Path) -> list[tuple[int, int]] | None:
+    """Frame ranges to recognise one at a time, or None to hand faster-whisper the whole file.
+
+    None for anything short, and for anything that is not the 16 kHz mono 16-bit wav the extractor
+    writes — that is left to faster-whisper exactly as before.
+    """
+    try:
+        with wave.open(str(source), "rb") as reader:
+            if (reader.getframerate(), reader.getnchannels(), reader.getsampwidth()) != (_SAMPLE_RATE, 1, 2):
+                return None
+            total = reader.getnframes()
+    except (OSError, EOFError, wave.Error):
+        return None
+
+    if total <= LONG_AUDIO_SECONDS * _SAMPLE_RATE:
+        return None
+
+    windows: list[tuple[int, int]] = []
+    start = 0
+    target = WINDOW_SECONDS * _SAMPLE_RATE
+    search = CUT_SEARCH_SECONDS * _SAMPLE_RATE
+    while total - start > target + search:
+        cut = _quietest_frame(source, start + target - search, start + target)
+        windows.append((start, cut))
+        start = cut
+    windows.append((start, total))
+    return windows
+
+
+def _quietest_frame(source: Path, first: int, end: int) -> int:
+    """The middle of the quietest block in [first, end): a pause between words, not mid-syllable."""
+    import numpy as np
+
+    samples = _read_window(source, first, end)
+    block = int(_CUT_BLOCK_SECONDS * _SAMPLE_RATE)
+    count = len(samples) // block
+    if count == 0:
+        return end
+    energy = np.square(samples[: count * block]).reshape(count, block).sum(axis=1)
+    return first + int(np.argmin(energy)) * block + block // 2
+
+
+def _read_window(source: Path, first: int, end: int) -> Any:
+    """Frames [first, end) as the float32 array faster-whisper takes in place of a path."""
+    import numpy as np
+
+    with wave.open(str(source), "rb") as reader:
+        reader.setpos(first)
+        raw = reader.readframes(end - first)
+    return np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _shift(entry: dict[str, Any], offset: float) -> None:
+    """Moves a window's segment (and its words) to where it sits in the whole track."""
+    entry["start"] = round(entry["start"] + offset, 3)
+    entry["end"] = round(entry["end"] + offset, 3)
+    for word in entry["words"]:
+        word["start"] = round(word["start"] + offset, 3)
+        word["end"] = round(word["end"] + offset, 3)
 
 
 def _segment_to_dict(index: int, segment: Any) -> dict[str, Any]:
