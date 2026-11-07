@@ -241,9 +241,34 @@ beam 5 / VAD on / `conditionOnPreviousText=false`, 변수 하나만 바꾸고 �
 - WPF 화면 나머지 — 진행 중 단계별 상태 열 전이, 선택 항목 제거가 캐시까지 지우는지
 - `whisper-large-v3` 다운로드(카탈로그 수정 후 재시도 안 해봄)
 - 처리 방식 B/C
-- **설치 프로그램은 이제 컴파일까지만 검증됐습니다** (2026-09-05, ISCC 6.7.3, 197초,
-  1.53 GiB). 실제 설치·업그레이드·제거를 돌려 본 적은 없습니다 — GPU 경고, VC++ 재배포
-  패키지 설치, 제거 시 `%LOCALAPPDATA%\KSubMaker` 유지 여부가 전부 미검증입니다.
+- **설치 프로그램의 업그레이드 경로는 검증됐습니다** (2026-11-07). 아래 "추가로 검증됨"을
+  보세요. 남은 미검증은 **제거**, **GPU 없는 기계의 경고**, **VC++ 재배포 패키지 설치**입니다 —
+  뒤의 둘은 조건이 안 맞아 코드가 그 자리를 건너뜁니다(이 PC에는 3080 Ti와 VC++가 이미 있음).
+
+**2026-11-07 추가로 검증됨 — 설치 프로그램의 업그레이드 (1.2.0 → 1.3.0):**
+
+`/SILENT /SP- /SUPPRESSMSGBOXES` 로 돌려 종료 코드 0, 129초, 로그에 `Installation process
+succeeded.`
+
+- **실기에는 설치본이 두 개 있습니다.** `C:\Dev\KSubMaker\KSubMaker\`가 설치 프로그램이 만든
+  것이고(레지스트리·시작 메뉴가 이것을 가리킵니다), 그 **상위** `C:\Dev\KSubMaker\`는 포터블
+  zip을 수동으로 푼 1.0.0이었습니다. §3의 "앱 설치 `C:\Dev\KSubMaker`"는 후자를 가리킨
+  것이어서 오해를 낳습니다. 1.0.0 쪽은 2026-11-07에 지웠습니다(§6.30).
+- **이전 설치를 `AppId`로 찾아 같은 위치에 덮습니다.** 로그의
+  `Directory for uninstall files: C:\Dev\KSubMaker\KSubMaker`,
+  `Will append to existing uninstall log`,
+  `Deleting uninstall key left over from previous administrative 64-bit install`.
+  제거 항목은 **하나로 유지**되고 `DisplayVersion`만 1.2.0 → 1.3.0으로 바뀝니다.
+- **사용자 데이터는 그대로입니다.** DB 163,840바이트 동일, 내려받은 모델 10개 유지, 캐시·로그 유지.
+- **EF 마이그레이션이 실제 DB에 적용됩니다.** 여기가 업그레이드의 핵심이었습니다. 앱을 띄우니
+  `DatabaseInitializer: 마이그레이션 1건을 적용합니다. 20261102075216_AddPlaylists`가 찍히고,
+  `__EFMigrationsHistory` 3 → 4, `Playlists`·`PlaylistEntries` 테이블이 생기고,
+  `AppSettings` 48 · `Jobs` 1 · `Models` 10은 **한 행도 바뀌지 않았습니다.**
+  대조하려면 DB를 먼저 복사해 두세요 — 마이그레이션은 되돌릴 수 없습니다.
+- 종료도 깨끗합니다(§6.8의 "예상치 못한 오류" 창 없음, 남은 프로세스 없음).
+
+**아직 안 해 본 것: 제거.** 쓰고 있는 설치본이 사라지므로 일부러 돌리지 않았습니다. 사용자
+데이터 유지를 묻는 분기(`CurUninstallStepChanged`)가 미검증입니다.
 
 ### 5.1 NVIDIA가 아닌 GPU (AMD·Intel Arc)
 
@@ -624,6 +649,26 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
       경계에서 문장이 갈리거나 겹치지 않는지 사람이 한 번 봐야 합니다.
     → 가드: `test_long_audio_is_recognised_in_windows_cut_at_the_quiet_spot` 외 3건.
 
+30. **무인 설치가 메시지 창에서 영원히 멈췄음** — `/SILENT /SP- /SUPPRESSMSGBOXES`로 업그레이드를
+    돌렸더니 파일 복사가 **다 끝난 뒤** NLLB 비상업 라이선스 안내 창에서 멈췄습니다. 로그에
+    `Message box (OK):`가 20:56:14에 찍히고 `User chose OK`가 **6초 뒤** 20:56:20에 찍혀 사람이
+    눌러 준 것임이 드러났습니다. 손으로 돌리고 있었기 때문에 "성공"으로 보였습니다.
+    - **`/SUPPRESSMSGBOXES`는 `SuppressibleMsgBox`만 자동 응답합니다.** 평범한 `MsgBox`는 무인
+      모드에서도 그대로 떠서 무한히 기다립니다. `.iss`에 `MsgBox` 호출이 9군데 있었고 전부
+      이 결함이었습니다.
+    - **더 나쁜 자리가 있었습니다.** `InitializeSetup`의 GPU 경고와 `PrepareToInstall`의 VC++
+      확인은 **파일 복사 전**입니다. NVIDIA GPU가 없거나 VC++ 재배포 패키지가 없는 기계에서
+      무인 설치를 하면 **아무것도 설치되지 않은 채** 멈춥니다. 실기에는 둘 다 있어서 그 자리를
+      건너뛰었고, 그래서 이 더 심한 쪽은 이번에도 재현되지 않았습니다.
+    - 9군데 전부 `SuppressibleMsgBox`로 바꿨습니다. **억제될 때의 답은 그 창의 기본 버튼과 같게**
+      둡니다 — 무인 모드가 마법사의 기본 선택과 다르게 행동하면 안 되니까요. 유일하게 조심할
+      것이 제거 시 사용자 데이터 삭제 확인인데, 기본 버튼도 "아니오"이고 억제값도 `IDNO`입니다.
+      말없이 모델 수 GB를 지우는 일은 없어야 합니다.
+    - **고친 뒤 다시 돌려 확인했습니다**: `Defaulting to OK for suppressed message box (OK):`,
+      사람의 클릭 없이 23ms 뒤 로그 종료, 118초(이전 129초 — 그 차이가 기다린 시간).
+    - **자동 테스트로는 잡을 수 없습니다.** `.iss`를 컴파일하는 테스트가 없고(§6.14), 있어도
+      컴파일은 통과합니다. `[Code]` 머리에 "이 파일에서는 `MsgBox`를 쓰지 말라"고 적어 뒀습니다.
+
 **패턴**: 실패한 것들은 전부 *자동 테스트가 통과하는데 실기에서 깨지는* 종류였습니다.
 플랫폼 차이(PS 5.1 vs pwsh 7), 외부 서비스의 실제 응답, GPU 유무. 새 기능을 넣을 때
 "이게 CI에서 통과하는데 사용자 PC에서 깨질 수 있는 이유가 있나?"를 먼저 물어보세요.
@@ -646,9 +691,9 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
    감수할 만한 품질 차이인지가 판단 기준입니다.
 5. WPF 화면 나머지 확인 — 진행 중 상태 열이 단계에 따라 바뀌는지, 선택 항목 제거가 캐시까지
    지우는지. (상태 열 `취소됨` 표시, 버튼 비활성화, 알림 창은 확인됨)
-6. 처리 방식 B/C 실측. 설치 프로그램은 **생성은 됩니다**(§6.14) — 남은 것은 실제로
-   설치·업그레이드·제거를 돌려 보는 것입니다. 기존 설치가 `C:\Dev\KSubMaker`에 있으므로
-   업그레이드 경로까지 한 번에 확인됩니다.
+6. 처리 방식 B/C 실측. 설치 프로그램은 생성·설치·**업그레이드**까지 확인됐습니다(§5,
+   2026-11-07). 남은 것은 **제거**(사용자 데이터 유지 분기)와, GPU·VC++가 없는 기계에서의
+   선행 조건 경고입니다 — 실기에는 둘 다 있어서 그 코드가 실행되지 않습니다.
 7. 남은 기능 제한: Fake AI 모드가 자막 원본 override를 무시하고 **설정 지문 무효화도 없음**
    (§6.6), 이미지 기반 내부 자막(PGS/VobSub) 선택은 되지만 처리 실패.
    `IModelManager.ResolveModelIdAsync`는 §6.11 이후로도 호출부가 없는 죽은 코드입니다 —
@@ -666,5 +711,7 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
 - 프로토콜을 바꾸면 `AGENTS.md §6` 절차를 따르세요: 버전 올리기 → C#/Python 양쪽 → 문서 →
   왕복 테스트. 지금까지 1.0 → 1.1(출력 충돌 정책, 자막 언어) → 1.2(CUDA 라이브러리 상태) →
   1.3(`extractAudio` 미리 추출 명령) → 1.4(`settings.initialPrompt`) →
-  1.5(`sourceMode: "externalSubtitle"` + `process.subtitlePath`).
+  1.5(`sourceMode: "externalSubtitle"` + `process.subtitlePath`) →
+  1.6(원어 자막 저장). `NO_SPEECH` 오류 코드는 1.6 안에서 더해졌습니다 — 오류 코드는
+  `WORKER_PROTOCOL.md`가 닫힌 집합으로 적고 있으므로 다음에 더할 때는 버전을 올리세요.
 - 커밋 메시지는 한국어, 무엇을 왜 고쳤는지 서술형으로 씁니다. `git log`가 실제 사례입니다.

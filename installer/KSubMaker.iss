@@ -171,6 +171,28 @@ Type: dirifempty;     Name: "{app}"
 [Code]
 
 { ------------------------------------------------------------------------- }
+{  이 파일에서는 MsgBox 를 쓰지 마세요. 전부 SuppressibleMsgBox 입니다.      }
+{                                                                            }
+{  2026-11-07, `/SILENT /SP- /SUPPRESSMSGBOXES` 로 1.2.0 -> 1.3.0 업그레이드  }
+{  를 돌렸더니 파일 복사가 다 끝난 뒤 NLLB 라이선스 안내 창에서 멈췄습니다.  }
+{  로그에 `Message box (OK):` 가 찍히고 `User chose OK` 가 6초 뒤에 찍힌 것   }
+{  으로 확인했습니다 — 사람이 눌러 준 것입니다.                              }
+{                                                                            }
+{  `/SUPPRESSMSGBOXES` 는 SuppressibleMsgBox 만 자동 응답합니다. 평범한       }
+{  MsgBox 는 무인 모드에서도 그대로 떠서 무한히 기다립니다. InitializeSetup   }
+{  과 PrepareToInstall 의 창은 파일 복사 *전*이라 더 나쁩니다 — NVIDIA GPU 가 }
+{  없거나 VC++ 재배포 패키지가 없는 기계에서는 아무것도 설치되지 않은 채      }
+{  멈춥니다.                                                                 }
+{                                                                            }
+{  억제될 때의 답(마지막 인자)은 그 창의 **기본 버튼과 같게** 둡니다. 단      }
+{  하나의 예외가 제거 시 사용자 데이터 삭제 확인인데, 그건 기본 버튼도        }
+{  "아니오"이고 억제값도 IDNO 입니다 — 말없이 모델 수 GB 를 지우면 안 됩니다. }
+{                                                                            }
+{  자동 테스트는 이것을 잡지 못합니다. .iss 를 컴파일하는 테스트가 없고,      }
+{  있어도 컴파일은 통과합니다 (§6.14 와 같은 종류).                           }
+{ ------------------------------------------------------------------------- }
+
+{ ------------------------------------------------------------------------- }
 {  NVIDIA GPU 감지                                                           }
 {                                                                            }
 {  KSubMaker.Infrastructure 의 WindowsHardwareDetector 와 같은 곳을 봅니다:  }
@@ -252,15 +274,16 @@ begin
     DownloadTemporaryFile('https://aka.ms/vs/17/release/vc_redist.x64.exe',
                           'vc_redist.x64.exe', '', nil);
   except
-    MsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), [GetExceptionMessage]),
-           mbError, MB_OK);
+    SuppressibleMsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), [GetExceptionMessage]),
+                       mbError, MB_OK, IDOK);
     Exit;
   end;
 
   { /norestart 가 중요합니다. 재부팅 요구가 설치 도중 끼어들면 안 됩니다. }
   if not Exec(TempFile, '/install /quiet /norestart', '', SW_SHOW, ewWaitUntilTerminated, ExitCode) then
   begin
-    MsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), ['Exec failed']), mbError, MB_OK);
+    SuppressibleMsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), ['Exec failed']),
+                       mbError, MB_OK, IDOK);
     Exit;
   end;
 
@@ -271,8 +294,8 @@ begin
     섹션 태그로 읽습니다. Pascal 배열 리터럴을 다음 줄로 내리면 컴파일이
     "Invalid section tag" 로 죽습니다. }
   if not Result then
-    MsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), ['vc_redist.x64.exe -> ' + IntToStr(ExitCode)]),
-      mbError, MB_OK);
+    SuppressibleMsgBox(FmtMessage(ExpandConstant('{cm:VcRedistFailed}'), ['vc_redist.x64.exe -> ' + IntToStr(ExitCode)]),
+      mbError, MB_OK, IDOK);
 end;
 
 function InitializeSetup(): Boolean;
@@ -281,9 +304,11 @@ begin
 
   if not HasNvidiaGpu() then
   begin
-    { 정보 제공 후 사용자가 결정합니다. 기본 선택은 "예"(계속) 입니다. }
-    if MsgBox(ExpandConstant('{cm:NoGpuMessage}'),
-              mbInformation, MB_YESNO or MB_DEFBUTTON1) = IDNO then
+    { 정보 제공 후 사용자가 결정합니다. 기본 선택은 "예"(계속) 입니다.
+      무인 설치에서도 같은 선택을 합니다 — 이 창은 막는 것이 아니라 알리는 것이고,
+      파일을 복사하기 *전*이라 여기서 멈추면 아무것도 설치되지 않습니다. }
+    if SuppressibleMsgBox(ExpandConstant('{cm:NoGpuMessage}'),
+                          mbInformation, MB_YESNO or MB_DEFBUTTON1, IDYES) = IDNO then
       Result := False;
   end;
 
@@ -299,8 +324,10 @@ begin
   if HasVcRedist() then
     Exit;
 
-  if MsgBox(ExpandConstant('{cm:VcRedistMessage}'),
-            mbConfirmation, MB_YESNO or MB_DEFBUTTON1) = IDYES then
+  { 무인 설치는 기본 버튼과 같은 "예"로 진행합니다 — 받아서 설치합니다. 실패해도
+    위의 알림이 전부 억제되고 설치는 계속되므로 멈추지 않습니다. }
+  if SuppressibleMsgBox(ExpandConstant('{cm:VcRedistMessage}'),
+                        mbConfirmation, MB_YESNO or MB_DEFBUTTON1, IDYES) = IDYES then
     InstallVcRedist();
 
   { 거절했거나 실패했어도 KSubMaker 설치는 계속합니다. 기본 번역 엔진(NLLB)과 음성 인식은 }
@@ -315,8 +342,9 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-    { 기본 번역 모델의 비상업 라이선스는 설치 시점에 한 번 분명히 알립니다. }
-    MsgBox(ExpandConstant('{cm:NonCommercialMessage}'), mbInformation, MB_OK);
+    { 기본 번역 모델의 비상업 라이선스는 설치 시점에 한 번 분명히 알립니다.
+      이 창이 `/SILENT` 설치를 멈추게 한 그 창입니다 (아래 주석 참고). }
+    SuppressibleMsgBox(ExpandConstant('{cm:NonCommercialMessage}'), mbInformation, MB_OK, IDOK);
   end;
 end;
 
@@ -338,14 +366,16 @@ begin
     if not DirExists(DataDir) then
       Exit;
 
-    if MsgBox(FmtMessage(ExpandConstant('{cm:KeepDataMessage}'), [DataDir]),
-              mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    { 억제될 때의 답은 반드시 IDNO — 기본 버튼과 같고, 말없이 수 GB 를 지우지 않는
+      쪽입니다. 무인 제거로 모델을 날려 버리는 것은 되돌릴 수 없습니다. }
+    if SuppressibleMsgBox(FmtMessage(ExpandConstant('{cm:KeepDataMessage}'), [DataDir]),
+                          mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
     begin
       if DelTree(DataDir, True, True, True) then
-        MsgBox(ExpandConstant('{cm:KeepDataDeleted}'), mbInformation, MB_OK)
+        SuppressibleMsgBox(ExpandConstant('{cm:KeepDataDeleted}'), mbInformation, MB_OK, IDOK)
       else
-        MsgBox(FmtMessage(ExpandConstant('{cm:KeepDataFailed}'), [DataDir]),
-               mbError, MB_OK);
+        SuppressibleMsgBox(FmtMessage(ExpandConstant('{cm:KeepDataFailed}'), [DataDir]),
+                           mbError, MB_OK, IDOK);
     end;
   end;
 end;
