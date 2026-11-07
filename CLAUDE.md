@@ -20,12 +20,12 @@ Claude Code가 이 저장소에서 작업을 이어갈 때 **가장 먼저 읽�
 폴더 안 영상 → faster-whisper 원문 인식 → 한국어 번역 → `*.ko.srt`.
 WPF(.NET 10) UI와 Python AI Worker를 **별도 프로세스**로 분리하고 stdio JSON Lines로 통신합니다.
 
-- C# 191파일 · Python 39파일 · XAML 8파일 · 커밋 64개 (2026-09-26 실측)
-- 버전 **1.1.0** · 프로토콜 **v1.5** · EF Core 마이그레이션 4건
-- 테스트 **C# 1,903(단위 1,718 + 통합 185) / Python 754**, Release 빌드 경고 0
+- C# 212파일 · Python 39파일 · XAML 9파일 · 커밋 105개 (2026-11-07 실측)
+- 버전 **1.3.0** · 프로토콜 **v1.6** · EF Core 마이그레이션 4건 · 오류 코드 25개
+- 테스트 **C# 2,042(단위 1,849 + 통합 193) / Python 787**, Release 빌드 경고 0
 
 > **테스트 수치 주의.** 위 "전부 통과"는 **Linux/CI 기준**입니다. 실기(Windows)에서 그대로
-> 돌리면 **C# 6건 · Python 9건이 실패하고 통합 테스트 52건이 스킵**됩니다(2026-09-26 재확인). 전부 POSIX를 가정한
+> 돌리면 **C# 6건 · Python 9건이 실패하고 통합 테스트 53건이 스킵**됩니다(2026-11-07 재확인). 전부 POSIX를 가정한
 > 테스트가 Windows에서 깨지는 것이지 제품 결함이 아닙니다 — C#은 경로 구분자
 > (`"/videos\movie.ko.srt"` vs `"\videos\..."`, `JobFactoryTests`·`FullPipelineTests`·
 > `RetryAndConflictPolicyTests`), Python은 `/usr/bin:/bin`·`/tmp` 하드코딩
@@ -44,7 +44,7 @@ WPF(.NET 10) UI와 Python AI Worker를 **별도 프로세스**로 분리하고 s
 
 ```powershell
 dotnet build KSubMaker.sln -c Release      # 경고 0 유지 — 이건 실기에서도 그대로
-dotnet test  KSubMaker.sln -c Release      # Windows 기준선: 실패 6 · 스킵 52 (§1 주의 참고)
+dotnet test  KSubMaker.sln -c Release      # Windows 기준선: 실패 6 · 스킵 53 (§1 주의 참고)
 python -m pytest worker/tests              # Windows 기준선: 실패 9
 ```
 
@@ -59,6 +59,11 @@ Linux/CI에서도 `EnableWindowsTargeting=true` 덕분에 **WPF까지 컴파일 
 & .\tools\python\python.exe -m pip install pytest
 $env:PYTHONPATH="$PWD\worker"; & .\tools\python\python.exe -m pytest worker\tests -q
 ```
+
+**경고 0이 우리 코드만의 문제가 아닙니다.** 10개가 한꺼번에 늘어 있던 적이 있는데(2026-11-07)
+전부 NU1902/NU1903이었고 컴파일러 경고는 0이었습니다 — 패키지 파일은 한 줄도 안 바뀌었고
+nuget.org에 권고가 새로 올라온 것이었습니다. `Directory.Packages.props`의 암호화 핀은
+**EF Core가 움직일 때가 아니라 권고가 붙을 때마다** 올려야 합니다.
 
 **"통과"를 "검증됨"으로 착각하지 마세요.** GPU·모델이 필요한 경로는 어떤 자동 테스트도 건드리지 않습니다.
 그건 `scripts\smoke-gpu.ps1`이 담당하고, 사람이 직접 돌려야 합니다.
