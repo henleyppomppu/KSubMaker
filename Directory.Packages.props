@@ -39,12 +39,18 @@
       Transitive pins. CentralPackageTransitivePinningEnabled is on, so these override the versions
       EF Core 10 would otherwise drag in. Both of the pinned-away versions carry NU1903 advisories
       (SQLitePCLRaw 2.1.11, System.Security.Cryptography.Xml 9.0.0 via EF Core Design).
+
+      The crypto pair needs raising whenever a new advisory lands, not only when EF Core moves:
+      10.0.10 was clean when it was pinned and picked up five advisories (NU1902/NU1903) afterwards,
+      which turns the `dotnet build` warning count off zero without a single line of our own code
+      changing. Pkcs is pinned too because Xml drags it in and it is flagged separately.
     -->
     <PackageVersion Include="SQLitePCLRaw.core" Version="2.1.12" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="2.1.12" />
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
 
     <!-- Tests -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
