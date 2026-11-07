@@ -216,4 +216,66 @@ public sealed class ProgressCalculatorTests
             estimate!.Value.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
         }
     }
+
+    // ---- stages a job does not run ------------------------------------------------------------
+
+    /// <summary>Korean audio: no 번역, so the end of 음성 인식 is most of the way, not 65%.</summary>
+    [Fact]
+    public void Without_translation_the_other_stages_fill_the_whole_bar()
+    {
+        var skipped = new HashSet<JobStage> { JobStage.Translating };
+
+        ProgressCalculator.Overall(JobStage.WritingSubtitle, 100d, skipped).Should().Be(100d);
+        ProgressCalculator.Overall(JobStage.Transcribing, 100d, skipped)
+            .Should().BeApproximately(65d / 68d * 100d, 0.01d);
+    }
+
+    /// <summary>From an embedded subtitle: no 음성 인식, so 번역 starts at 10 of 45, not at 65%.</summary>
+    [Fact]
+    public void Without_transcription_translation_starts_where_extraction_ended()
+    {
+        var skipped = new HashSet<JobStage> { JobStage.Transcribing };
+
+        ProgressCalculator.Overall(JobStage.Translating, 0d, skipped)
+            .Should().BeApproximately(10d / 45d * 100d, 0.01d);
+    }
+
+    /// <summary>Taking a stage the job has not reached out of the plan never moves the bar back.</summary>
+    [Theory]
+    [InlineData(JobStage.Probing, JobStage.Transcribing)]
+    [InlineData(JobStage.Transcribing, JobStage.Translating)]
+    [InlineData(JobStage.ExtractingAudio, JobStage.Translating)]
+    public void Skipping_a_later_stage_only_moves_the_bar_forward(JobStage current, JobStage dropped)
+    {
+        for (var p = 0d; p <= 100d; p += 10d)
+        {
+            var before = ProgressCalculator.Overall(current, p, new HashSet<JobStage>());
+            var after = ProgressCalculator.Overall(current, p, new HashSet<JobStage> { dropped });
+            after.Should().BeGreaterThanOrEqualTo(before);
+        }
+    }
+
+    [Fact]
+    public void The_current_stage_always_counts_even_if_listed_as_skipped()
+    {
+        var skipped = new HashSet<JobStage> { JobStage.Transcribing };
+
+        ProgressCalculator.Overall(JobStage.Transcribing, 50d, skipped)
+            .Should().Be(ProgressCalculator.Overall(JobStage.Transcribing, 50d));
+    }
+
+    /// <summary>
+    /// A job that resumed at 60% has done nothing yet this run. Measured from zero it looked nearly
+    /// finished; measured from where it started, the estimate follows this run's actual pace.
+    /// </summary>
+    [Fact]
+    public void Remaining_time_is_measured_from_where_this_run_started()
+    {
+        // 60% → 70% took 100 s, so the remaining 30% takes 300 s.
+        ProgressCalculator.EstimateRemaining(70d, TimeSpan.FromSeconds(100), startProgress: 60d)
+            .Should().Be(TimeSpan.FromSeconds(300));
+
+        ProgressCalculator.EstimateRemaining(60.2d, TimeSpan.FromSeconds(5), startProgress: 60d)
+            .Should().BeNull("too little progress this run to extrapolate from");
+    }
 }

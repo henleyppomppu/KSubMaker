@@ -112,26 +112,17 @@ public static partial class Strings
     /// <summary>KSubMaker · 한국어 자막 생성기</summary>
     public static string MainWindowTitle => Get(nameof(MainWindowTitle));
 
-    /// <summary>대상 폴더</summary>
-    public static string TargetFolderLabel => Get(nameof(TargetFolderLabel));
-
-    /// <summary>폴더 선택</summary>
-    public static string SelectFolderButton => Get(nameof(SelectFolderButton));
-
     /// <summary>하위 폴더 포함</summary>
     public static string IncludeSubfoldersLabel => Get(nameof(IncludeSubfoldersLabel));
 
     /// <summary>숨김 폴더 포함</summary>
     public static string IncludeHiddenFoldersLabel => Get(nameof(IncludeHiddenFoldersLabel));
+    public static string HideCompletedMenuItem => Get(nameof(HideCompletedMenuItem));
+    public static string HiddenCompletedFormat => Get(nameof(HiddenCompletedFormat));
+    public static string HiddenCompletedTooltip => Get(nameof(HiddenCompletedTooltip));
 
     /// <summary>이미 한국어 자막이 있으면 건너뛰기</summary>
     public static string SkipIfKoreanSubtitleLabel => Get(nameof(SkipIfKoreanSubtitleLabel));
-
-    /// <summary>목록 새로고침</summary>
-    public static string ScanButton => Get(nameof(ScanButton));
-
-    /// <summary>대상 폴더를 다시 검색해 새 영상은 목록에 넣고 기존 항목의 상태를 갱신합니다.</summary>
-    public static string ScanHint => Get(nameof(ScanHint));
 
     /// <summary>검색 중단</summary>
     public static string ScanCancelButton => Get(nameof(ScanCancelButton));
@@ -172,15 +163,6 @@ public static partial class Strings
     /// <summary>모델 관리</summary>
     public static string ModelsButton => Get(nameof(ModelsButton));
 
-    /// <summary>전체 선택</summary>
-    public static string SelectAllButton => Get(nameof(SelectAllButton));
-
-    /// <summary>선택 해제</summary>
-    public static string ClearSelectionButton => Get(nameof(ClearSelectionButton));
-
-    /// <summary>선택</summary>
-    public static string ColumnSelected => Get(nameof(ColumnSelected));
-
     /// <summary>파일명</summary>
     public static string ColumnFileName => Get(nameof(ColumnFileName));
 
@@ -193,11 +175,8 @@ public static partial class Strings
     /// <summary>상태</summary>
     public static string ColumnStatus => Get(nameof(ColumnStatus));
 
-    /// <summary>전체 진행률</summary>
+    /// <summary>진행</summary>
     public static string ColumnProgress => Get(nameof(ColumnProgress));
-
-    /// <summary>단계 진행률</summary>
-    public static string ColumnStageProgress => Get(nameof(ColumnStageProgress));
 
     /// <summary>남은 시간</summary>
     public static string ColumnRemaining => Get(nameof(ColumnRemaining));
@@ -364,6 +343,12 @@ public static partial class Strings
     /// <summary>건너뜀</summary>
     public static string JobStatusSkipped => Get(nameof(JobStatusSkipped));
 
+    /// <summary> · 목록에서 뺌 {0}건</summary>
+    public static string EnqueueSummaryRemovedFormat => Get(nameof(EnqueueSummaryRemovedFormat));
+
+    /// <summary>음성 없음</summary>
+    public static string JobStatusNoSpeech => Get(nameof(JobStatusNoSpeech));
+
     /// <summary>일시정지</summary>
     public static string JobStatusPaused => Get(nameof(JobStatusPaused));
 
@@ -415,14 +400,8 @@ public static partial class Strings
     /// <summary>파일 정보를 확인하는 중입니다... ({0}/{1})</summary>
     public static string ProbingFilesFormat => Get(nameof(ProbingFilesFormat));
 
-    /// <summary>작업 추가 결과</summary>
-    public static string EnqueueSummaryTitle => Get(nameof(EnqueueSummaryTitle));
-
     /// <summary>새로 추가 {0}건 · 다시 넣음 {1}건 · 이미 완료 {2}건 · 변경 없음 {3}건 · 건너뜀 {4}건</summary>
     public static string EnqueueSummaryFormat => Get(nameof(EnqueueSummaryFormat));
-
-    /// <summary>작업이 실행 중일 때는 파일을 검색할 수 없습니다.</summary>
-    public static string QueueBusyCannotScan => Get(nameof(QueueBusyCannotScan));
 
     /// <summary>시작할 수 있는 작업이 없습니다. 완료·실패·취소·건너뛴 작업은 [다시 넣기]를 눌러 큐에 다시 넣은 뒤 시작하세요.</summary>
     public static string NoRunnableJobs => Get(nameof(NoRunnableJobs));
@@ -1103,7 +1082,7 @@ public static partial class Strings
     /// <summary>로컬 LLM</summary>
     public static string ModelKindLlm => Get(nameof(ModelKindLlm));
 
-    /// <summary>영상 하나를 두 단계로 처리합니다 — 먼저 음성 인식 모델이 말소리를 원어 자막으로 뽑아내고, 그다음 번역 모델이 그 자막을 한국어로 다시 옮깁니다. 아래 탭에서 각 단계에 쓸 모델을 고릅니다.</summary>
+    /// <summary>영상 하나를 두 단계로 처리합니다 — 먼저 음성 인식 모델이 말소리를 원어 자막으로 뽑아내고, 그다음 번역 모델이 그 자막을 한국어로 다시 옮깁니다. 아래 두 목록의 "사용"에서 각 단계에 쓸 모델을 고릅니다.</summary>
     public static string ModelPipelineOverviewHint => Get(nameof(ModelPipelineOverviewHint));
 
     /// <summary>1차적으로 음성에서 자막을 추출하는 모델입니다. 영상 속 말소리를 원어 텍스트로 받아쓰며, 모델이 클수록 정확하지만 느립니다.</summary>
@@ -1291,4 +1270,187 @@ public static partial class Strings
 
     /// <summary>설정을 저장하지 못했습니다. 설정 화면에서 직접 선택하세요. ({0})</summary>
     public static string ModelUseAfterDownloadFailedFormat => Get(nameof(ModelUseAfterDownloadFailedFormat));
+
+    /// <summary>드라이브 전체는 자동으로 검색하지 않습니다. 하위 폴더를 고르거나 목록 새로고침을 누르세요.</summary>
+    public static string DriveRootNotScannedMessage => Get(nameof(DriveRootNotScannedMessage));
+
+    /// <summary> · {0}건은 다른 폴더에 있어 그 폴더를 열면 보입니다.</summary>
+    public static string DropHiddenElsewhereFormat => Get(nameof(DropHiddenElsewhereFormat));
+
+    /// <summary>폴더</summary>
+    public static string FolderTreeHeader => Get(nameof(FolderTreeHeader));
+
+    /// <summary>재생목록</summary>
+    public static string PlaylistsHeader => Get(nameof(PlaylistsHeader));
+
+    /// <summary>새로 만들기</summary>
+    public static string NewPlaylistButton => Get(nameof(NewPlaylistButton));
+
+    /// <summary>이름 바꾸기</summary>
+    public static string RenamePlaylistButton => Get(nameof(RenamePlaylistButton));
+
+    /// <summary>삭제</summary>
+    public static string DeletePlaylistButton => Get(nameof(DeletePlaylistButton));
+
+    /// <summary>'{0}' 재생목록을 지울까요? 안에 있던 작업과 자막은 그대로 남습니다.</summary>
+    public static string DeletePlaylistConfirmFormat => Get(nameof(DeletePlaylistConfirmFormat));
+
+    /// <summary>재생목록 이름</summary>
+    public static string PlaylistNameDialogTitle => Get(nameof(PlaylistNameDialogTitle));
+
+    /// <summary>재생목록 이름을 입력하세요.</summary>
+    public static string PlaylistNameDialogMessage => Get(nameof(PlaylistNameDialogMessage));
+
+    /// <summary>'{0}' 재생목록이 이미 있습니다. 다른 이름을 입력하세요.</summary>
+    public static string PlaylistNameTakenFormat => Get(nameof(PlaylistNameTakenFormat));
+
+    /// <summary>재생목록에 넣기</summary>
+    public static string AddToPlaylistMenuItem => Get(nameof(AddToPlaylistMenuItem));
+
+    /// <summary>새 재생목록에 넣기…</summary>
+    public static string AddToNewPlaylistMenuItem => Get(nameof(AddToNewPlaylistMenuItem));
+
+    /// <summary>'{0}' 재생목록에 {1}건을 넣었습니다.</summary>
+    public static string AddedToPlaylistFormat => Get(nameof(AddedToPlaylistFormat));
+
+    /// <summary> (이미 들어 있던 {0}건은 그대로)</summary>
+    public static string AlreadyInPlaylistFormat => Get(nameof(AlreadyInPlaylistFormat));
+
+    /// <summary>재생목록에서 빼기</summary>
+    public static string RemoveFromPlaylistButton => Get(nameof(RemoveFromPlaylistButton));
+
+    /// <summary>{0}건을 이 재생목록에서 뺄까요? 작업과 자막은 원래 폴더에 그대로 남습니다.</summary>
+    public static string RemoveFromPlaylistConfirmFormat => Get(nameof(RemoveFromPlaylistConfirmFormat));
+
+    /// <summary>재생목록에서 {0}건을 뺐습니다.</summary>
+    public static string RemovedFromPlaylistFormat => Get(nameof(RemovedFromPlaylistFormat));
+
+    /// <summary>폴더 · {0}</summary>
+    public static string ViewTitleFolderFormat => Get(nameof(ViewTitleFolderFormat));
+
+    /// <summary>재생목록 · {0}</summary>
+    public static string ViewTitlePlaylistFormat => Get(nameof(ViewTitlePlaylistFormat));
+
+    /// <summary>음성 준비됨</summary>
+    public static string ProgressAudioReady => Get(nameof(ProgressAudioReady));
+
+    /// <summary>작업 중인 폴더로</summary>
+    public static string ReturnToRunningViewButton => Get(nameof(ReturnToRunningViewButton));
+
+    /// <summary>커뮤니티</summary>
+    public static string AboutCommunityLabel => Get(nameof(AboutCommunityLabel));
+
+    /// <summary>파일</summary>
+    public static string MenuFile => Get(nameof(MenuFile));
+
+    /// <summary>보기</summary>
+    public static string MenuView => Get(nameof(MenuView));
+
+    /// <summary>작업</summary>
+    public static string MenuJobs => Get(nameof(MenuJobs));
+
+    /// <summary>도구</summary>
+    public static string MenuTools => Get(nameof(MenuTools));
+
+    /// <summary>폴더 열기…</summary>
+    public static string OpenFolderMenuItem => Get(nameof(OpenFolderMenuItem));
+
+    /// <summary>새로고침</summary>
+    public static string RefreshMenuItem => Get(nameof(RefreshMenuItem));
+
+    /// <summary>목록과 폴더 트리를 다시 읽습니다. 지운 영상은 빠지고, 새로 생긴 자막도 확인합니다. (F5)</summary>
+    public static string RefreshTooltip => Get(nameof(RefreshTooltip));
+
+    /// <summary>끝내기</summary>
+    public static string ExitMenuItem => Get(nameof(ExitMenuItem));
+
+    /// <summary>사용</summary>
+    public static string ModelColumnInUse => Get(nameof(ModelColumnInUse));
+
+    /// <summary>이 모델을 사용합니다. 설치된 모델만 고를 수 있습니다.</summary>
+    public static string ModelUseRadioTooltip => Get(nameof(ModelUseRadioTooltip));
+
+    /// <summary>'{0}'은(는) 아직 설치되지 않았습니다. 먼저 다운로드하세요.</summary>
+    public static string ModelNotInstalledForUseFormat => Get(nameof(ModelNotInstalledForUseFormat));
+
+    /// <summary>'{0}'을(를) 이미 사용 중입니다.</summary>
+    public static string ModelAlreadyInUseFormat => Get(nameof(ModelAlreadyInUseFormat));
+
+    /// <summary>정보</summary>
+    public static string MenuAbout => Get(nameof(MenuAbout));
+
+    /// <summary>디스코드 커뮤니티</summary>
+    public static string DiscordCommunityMenuItem => Get(nameof(DiscordCommunityMenuItem));
+
+    /// <summary>소스 저장소 (GitHub)</summary>
+    public static string RepositoryMenuItem => Get(nameof(RepositoryMenuItem));
+
+    /// <summary>모델</summary>
+    public static string ModelGroupCaption => Get(nameof(ModelGroupCaption));
+
+    /// <summary>관리…</summary>
+    public static string ManageModelsButton => Get(nameof(ManageModelsButton));
+
+    /// <summary>설치된 모델만 나옵니다. 더 받으려면 관리…를 누르세요. 고르면 바로 저장되고, 다음 시작부터 적용됩니다.</summary>
+    public static string ModelChoiceHint => Get(nameof(ModelChoiceHint));
+
+    /// <summary>모델 선택을 저장했습니다.</summary>
+    public static string ModelChoiceSavedMessage => Get(nameof(ModelChoiceSavedMessage));
+
+    /// <summary>모델 선택을 저장했습니다. 지금 도는 작업에는 적용되지 않고 다음 시작부터 적용됩니다.</summary>
+    public static string ModelChoiceSavedNextRunMessage => Get(nameof(ModelChoiceSavedNextRunMessage));
+
+    /// <summary>✎ 메모 추가 (더블클릭)</summary>
+    public static string NotePlaceholder => Get(nameof(NotePlaceholder));
+
+    /// <summary>▶ 재생</summary>
+    public static string PlayHoverButton => Get(nameof(PlayHoverButton));
+
+    /// <summary>자막 보기</summary>
+    public static string OpenSubtitleHoverButton => Get(nameof(OpenSubtitleHoverButton));
+
+    /// <summary>자막 파일을 찾지 못했습니다. 옮겨졌거나 지워졌을 수 있습니다.</summary>
+    public static string SubtitleFileNotFoundMessage => Get(nameof(SubtitleFileNotFoundMessage));
+
+    /// <summary>전체 선택 / 해제</summary>
+    public static string SelectAllTooltip => Get(nameof(SelectAllTooltip));
+
+    /// <summary>자막 보기 · {0}</summary>
+    public static string SubtitleEditorTitleFormat => Get(nameof(SubtitleEditorTitleFormat));
+
+    /// <summary>시간은 바꿀 수 없고 자막 글자만 고칠 수 있습니다. 글자를 모두 지운 줄은 저장할 때 빠집니다.</summary>
+    public static string SubtitleEditorHint => Get(nameof(SubtitleEditorHint));
+
+    /// <summary>시작</summary>
+    public static string SubtitleColumnStart => Get(nameof(SubtitleColumnStart));
+
+    /// <summary>끝</summary>
+    public static string SubtitleColumnEnd => Get(nameof(SubtitleColumnEnd));
+
+    /// <summary>자막</summary>
+    public static string SubtitleColumnText => Get(nameof(SubtitleColumnText));
+
+    /// <summary>자막 {0}줄</summary>
+    public static string SubtitleLoadedFormat => Get(nameof(SubtitleLoadedFormat));
+
+    /// <summary>저장했습니다. (자막 {0}줄)</summary>
+    public static string SubtitleSavedFormat => Get(nameof(SubtitleSavedFormat));
+
+    /// <summary>자막을 읽지 못했습니다: {0}</summary>
+    public static string SubtitleLoadFailedFormat => Get(nameof(SubtitleLoadFailedFormat));
+
+    /// <summary>자막을 저장하지 못했습니다: {0}</summary>
+    public static string SubtitleSaveFailedFormat => Get(nameof(SubtitleSaveFailedFormat));
+
+    /// <summary>저장하지 않은 변경이 있습니다. 저장하고 닫을까요? (아니요를 누르면 변경을 버리고 닫습니다)</summary>
+    public static string SubtitleUnsavedConfirm => Get(nameof(SubtitleUnsavedConfirm));
+
+    /// <summary>아직 만들어진 자막이 없습니다. 완료된 항목에서 볼 수 있습니다.</summary>
+    public static string SubtitleNotReadyMessage => Get(nameof(SubtitleNotReadyMessage));
+
+    /// <summary>기본 프로그램으로 열기</summary>
+    public static string OpenInDefaultAppButton => Get(nameof(OpenInDefaultAppButton));
+
+    /// <summary>자막 보기</summary>
+    public static string ViewSubtitleMenuItem => Get(nameof(ViewSubtitleMenuItem));
 }

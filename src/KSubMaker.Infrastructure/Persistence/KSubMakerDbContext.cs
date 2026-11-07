@@ -1,5 +1,6 @@
 using KSubMaker.Domain.Jobs;
 using KSubMaker.Domain.Models;
+using KSubMaker.Domain.Playlists;
 using KSubMaker.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,10 @@ public sealed class KSubMakerDbContext(DbContextOptions<KSubMakerDbContext> opti
 
     public DbSet<ModelInstallation> Models => Set<ModelInstallation>();
 
+    public DbSet<Playlist> Playlists => Set<Playlist>();
+
+    public DbSet<PlaylistEntry> PlaylistEntries => Set<PlaylistEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -32,5 +37,7 @@ public sealed class KSubMakerDbContext(DbContextOptions<KSubMakerDbContext> opti
         modelBuilder.ApplyConfiguration(new JobConfiguration());
         modelBuilder.ApplyConfiguration(new SettingRecordConfiguration());
         modelBuilder.ApplyConfiguration(new ModelInstallationConfiguration());
+        modelBuilder.ApplyConfiguration(new PlaylistConfiguration());
+        modelBuilder.ApplyConfiguration(new PlaylistEntryConfiguration());
     }
 }

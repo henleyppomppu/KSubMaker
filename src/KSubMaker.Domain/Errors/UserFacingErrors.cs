@@ -24,6 +24,7 @@ public static class UserFacingErrors
             ErrorCodes.WhisperModelNotFound => "음성 인식 모델이 설치되어 있지 않습니다. 모델 관리 화면에서 다운로드하세요.",
             ErrorCodes.WhisperModelLoadFailed => "음성 인식 모델을 불러오지 못했습니다. 모델 파일을 검증하거나 다시 다운로드하세요.",
             ErrorCodes.TranscriptionFailed => "음성 인식에 실패했습니다.",
+            ErrorCodes.NoSpeech => "음성이 없습니다. 자막으로 만들 내용이 없습니다.",
             ErrorCodes.TranslationModelNotFound => "번역 모델이 설치되어 있지 않습니다. 모델 관리 화면에서 다운로드하세요.",
             ErrorCodes.TranslationFailed => "번역에 실패했습니다.",
             ErrorCodes.InvalidTranslationResponse => "번역 결과 형식이 올바르지 않아 해당 구간을 다시 시도했습니다.",

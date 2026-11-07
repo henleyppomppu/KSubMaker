@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:KSubMaker.App.Resources"
+        xmlns:svc="clr-namespace:KSubMaker.App.Services"
         Title="{x:Static res:Strings.SettingsWindowTitle}"
         Height="720"
         Width="900"
@@ -654,6 +655,16 @@
                                         <Hyperlink NavigateUri="https://github.com/henleyppomppu/KSubMaker"
                                                    RequestNavigate="OnNavigateToUri">
                                             github.com/henleyppomppu/KSubMaker
+                                        </Hyperlink>
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource FieldRow}">
+                                    <TextBlock Text="{x:Static res:Strings.AboutCommunityLabel}"
+                                               Style="{StaticResource FieldLabel}" />
+                                    <TextBlock VerticalAlignment="Center">
+                                        <Hyperlink NavigateUri="https://discord.gg/BT6ZKkBxn"
+                                                   RequestNavigate="OnNavigateToUri">
+                                            <Run Text="{x:Static svc:AppLinks.DiscordText}" />
                                         </Hyperlink>
                                     </TextBlock>
                                 </StackPanel>

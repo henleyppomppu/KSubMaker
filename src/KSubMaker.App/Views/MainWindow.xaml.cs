@@ -24,8 +24,13 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(viewModel);
 
         _viewModel = viewModel;
+
         InitializeComponent();
         DataContext = viewModel;
+
+        // After InitializeComponent: named elements do not exist before it.
+        var version = typeof(MainWindow).Assembly.GetName().Version;
+        VersionMenuItem.Header = version is null ? "KSubMaker" : $"KSubMaker {version.ToString(3)}";
     }
 
     /// <summary>
@@ -62,6 +67,63 @@ public partial class MainWindow : Window
     /// signature; the view model wraps its own work in try/catch, so the only thing to guard here
     /// is the payload extraction.
     /// </summary>
+    private void OnOpenDiscord(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Discord);
+
+    private void OnOpenRepository(object sender, RoutedEventArgs e) => KSubMaker.App.Services.AppLinks.Open(KSubMaker.App.Services.AppLinks.Repository);
+
+    /// <summary>A model downloaded in 모델 관리 shows up the next time a list is opened.</summary>
+    private async void OnModelChoicesOpened(object? sender, EventArgs e) =>
+        await _viewModel.RefreshModelChoicesAsync();
+
+    private void OnExit(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// 작업 → 재생목록에 넣기 ▸, filled each time it opens: the playlists, then 새 재생목록에 넣기….
+    /// A bound ItemsSource cannot mix a list with a fixed item, and a submenu's popup is outside the
+    /// window's tree, where a RelativeSource binding back to the view model does not reliably resolve.
+    /// </summary>
+    private void OnPlaylistSubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menu || !ReferenceEquals(e.OriginalSource, menu))
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        foreach (var playlist in _viewModel.Playlists)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = playlist.Name,
+                Command = _viewModel.AddToPlaylistCommand,
+                CommandParameter = playlist
+            });
+        }
+
+        if (menu.Items.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+        }
+
+        menu.Items.Add(new MenuItem
+        {
+            Header = KSubMaker.App.Resources.Strings.AddToNewPlaylistMenuItem,
+            Command = _viewModel.AddToNewPlaylistCommand
+        });
+    }
+
+    /// <summary>
+    /// Scrolls the selected folder into view. Selection usually comes from the view model (the tree
+    /// following a folder picked elsewhere), and a bound IsSelected does not scroll on its own.
+    /// </summary>
+    private void OnFolderTreeItemSelected(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is TreeViewItem item)
+        {
+            item.BringIntoView();
+        }
+    }
+
     private async void OnQueueDrop(object sender, DragEventArgs e)
     {
         e.Handled = true;

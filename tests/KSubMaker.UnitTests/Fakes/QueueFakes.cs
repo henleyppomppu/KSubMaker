@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using KSubMaker.Application.Abstractions;
 using KSubMaker.Domain.Hardware;
 using KSubMaker.Domain.Jobs;
+using KSubMaker.Domain.Playlists;
 using KSubMaker.Domain.Settings;
 using KSubMaker.Domain.Subtitles;
 
@@ -270,6 +271,11 @@ public sealed class BlockingJobProcessor : IJobProcessor
     /// <summary>Completes once the pump has actually entered the processor.</summary>
     public Task Started => _started.Task;
 
+    private int _calls;
+
+    /// <summary>How many times the pump entered this processor.</summary>
+    public int Calls => Volatile.Read(ref _calls);
+
     /// <summary>Lets the parked job finish. Safe to call more than once.</summary>
     public void Release() => _release.TrySetResult();
 
@@ -298,6 +304,7 @@ public sealed class BlockingJobProcessor : IJobProcessor
         IProgress<JobProgress> progress,
         CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref _calls);
         _started.TrySetResult();
 
         if (HonoursCancellation)
@@ -315,5 +322,53 @@ public sealed class BlockingJobProcessor : IJobProcessor
         }
 
         return JobExecutionResult.Ok($"/videos/{job.Id}.ko.srt", cueCount: 1);
+    }
+}
+
+/// <summary>Playlists kept in lists, for tests that need a PlaylistService without a database.</summary>
+public sealed class InMemoryPlaylistRepository : IPlaylistRepository
+{
+    private readonly List<Playlist> _playlists = [];
+    private readonly List<PlaylistEntry> _entries = [];
+
+    public Task<IReadOnlyList<Playlist>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Playlist>>(_playlists.ToArray());
+
+    public Task<IReadOnlyList<PlaylistEntry>> GetEntriesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<PlaylistEntry>>(_entries.ToArray());
+
+    public Task AddAsync(Playlist playlist, CancellationToken cancellationToken = default)
+    {
+        _playlists.Add(playlist);
+        return Task.CompletedTask;
+    }
+
+    public Task RenameAsync(string id, string name, CancellationToken cancellationToken = default)
+    {
+        foreach (var playlist in _playlists.Where(p => p.Id == id))
+        {
+            playlist.Name = name;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(string id, CancellationToken cancellationToken = default)
+    {
+        _playlists.RemoveAll(p => p.Id == id);
+        _entries.RemoveAll(e => e.PlaylistId == id);
+        return Task.CompletedTask;
+    }
+
+    public Task AddEntriesAsync(IReadOnlyList<PlaylistEntry> entries, CancellationToken cancellationToken = default)
+    {
+        _entries.AddRange(entries);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveEntriesAsync(string playlistId, IReadOnlyList<string> jobIds, CancellationToken cancellationToken = default)
+    {
+        _entries.RemoveAll(e => e.PlaylistId == playlistId && jobIds.Contains(e.JobId));
+        return Task.CompletedTask;
     }
 }

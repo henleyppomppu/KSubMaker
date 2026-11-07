@@ -102,6 +102,37 @@ public sealed class AutoRetryTests
     }
 
     /// <summary>
+    /// A silent audio track is not a failure: there is simply no subtitle to make. Two lectures in
+    /// the user's library sat in red 실패 for exactly this (2026-11-02).
+    /// </summary>
+    [Fact]
+    public async Task A_silent_track_is_parked_as_nothing_to_do_and_is_never_retried()
+    {
+        var processor = new ScriptedJobProcessor(
+            JobExecutionResult.Fail(ErrorCodes.NoSpeech, "whisper returned no segments", recoverable: true));
+
+        var repository = new InMemoryJobRepository(NewJob());
+        await using var queue = NewQueue(repository, processor);
+        await queue.LoadAsync();
+
+        QueueDrainedEventArgs? drained = null;
+        queue.QueueDrained += (_, e) => drained = e;
+
+        await RunToIdleAsync(queue, Settings());
+
+        var job = queue.Jobs.Single();
+
+        processor.Calls.Should().Be(1, "the same silence would come back on a retry");
+        job.Status.Should().Be(JobStatus.Skipped);
+        job.ErrorCode.Should().Be(ErrorCodes.NoSpeech);
+        job.ErrorMessage.Should().Be(UserFacingErrors.Describe(ErrorCodes.NoSpeech));
+        job.OverallProgress.Should().Be(100d);
+        job.RetryCount.Should().Be(0);
+        drained.Should().NotBeNull();
+        drained!.Outcome.Failed.Should().Be(0, "a silent track is not a failure");
+    }
+
+    /// <summary>
     /// The failure mode that made the bug invisible: the transition threw, the pump's catch-all
     /// turned it into UNKNOWN, and the real error code never reached the user.
     /// </summary>

@@ -42,6 +42,9 @@ public sealed class JobConfiguration : IEntityTypeConfiguration<Job>
         // so it is deliberately not mapped rather than stored as ticks.
         builder.Ignore(j => j.EstimatedTimeRemaining);
 
+        // Rebuilt on every run from what the run actually does; meaningless after a restart.
+        builder.Ignore(j => j.SkippedStages);
+
         // Derived from SourceOverride; a stored copy could disagree with it after a manual edit.
         builder.Ignore(j => j.HasSourceOverride);
 

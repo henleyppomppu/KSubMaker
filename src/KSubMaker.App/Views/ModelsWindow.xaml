@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:KSubMaker.App.Resources"
         Title="{x:Static res:Strings.ModelsWindowTitle}"
-        Height="600"
+        Height="820"
         Width="1120"
-        MinHeight="420"
+        MinHeight="560"
         MinWidth="880"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -24,6 +24,31 @@
                 <PropertyGroupDescription PropertyName="Kind" />
             </CollectionViewSource.GroupDescriptions>
         </CollectionViewSource>
+        <!-- Light selection tint: the solid system blue hid the row's text and the progress %. -->
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#E4EEFB" />
+                    <Setter Property="BorderBrush" Value="#E4EEFB" />
+                    <Setter Property="Foreground" Value="#1F2328" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Not installed reads grey; installed reads as normal text. -->
+        <Style TargetType="DataGridRow">
+            <Setter Property="Foreground" Value="#1F2328" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsInstalled}" Value="False">
+                    <Setter Property="Foreground" Value="#9AA3AE" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#E4EEFB" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <DockPanel LastChildFill="True">
@@ -113,18 +138,27 @@
                        FontSize="12" />
         </Border>
 
-        <TabControl Margin="12,8,12,4" Padding="0" BorderThickness="0" Background="Transparent">
+        <!-- 음성 인식 above 번역: both steps' choices on one screen, no tab to switch -->
+        <Grid Margin="12,8,12,4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="150" />
+                <RowDefinition Height="1.5*" MinHeight="200" />
+            </Grid.RowDefinitions>
 
             <!-- ─────────────────────── 음성 인식 ─────────────────────── -->
-            <TabItem Header="{x:Static res:Strings.ModelKindWhisper}">
-                <DockPanel LastChildFill="True">
+                <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,10">
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{x:Static res:Strings.ModelKindWhisper}"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               Margin="2,4,0,0" />
                     <TextBlock DockPanel.Dock="Top"
                                Text="{x:Static res:Strings.ModelKindWhisperHint}"
                                Style="{StaticResource HintText}"
                                Margin="4,8,0,6" />
 
                     <DataGrid ItemsSource="{Binding Source={StaticResource RecognitionModels}}"
-                              SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                              SelectedItem="{Binding SelectedRecognitionModel, Mode=TwoWay}"
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               CanUserDeleteRows="False"
@@ -134,6 +168,7 @@
                               SelectionUnit="FullRow"
                               HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#ECEEF2"
                               RowHeaderWidth="0"
                               RowHeight="28"
                               EnableRowVirtualization="True"
@@ -143,6 +178,22 @@
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
 
                         <DataGrid.Columns>
+
+                            <!-- 사용: the model this step runs with; only installed models can be picked -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnInUse}" Width="48" CanUserSort="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <RadioButton HorizontalAlignment="Center"
+                                                     VerticalAlignment="Center"
+                                                     GroupName="{Binding Id}"
+                                                     IsChecked="{Binding IsInUse, Mode=OneWay}"
+                                                     IsEnabled="{Binding IsInstalled}"
+                                                     ToolTip="{x:Static res:Strings.ModelUseRadioTooltip}"
+                                                     Command="{Binding DataContext.UseModelCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                     CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <!-- 이름 -->
                             <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnName}" Width="340">
@@ -167,7 +218,19 @@
                             <!-- 상태 -->
                             <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnState}"
                                                 Binding="{Binding StateText}"
-                                                Width="100" />
+                                                Width="100">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsInstalled}" Value="True">
+                                                <Setter Property="Foreground" Value="#1F7A33" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
                             <!-- 크기 -->
                             <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnSize}"
@@ -228,18 +291,21 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
-            </TabItem>
 
             <!-- ─────────────────────── 번역 (NLLB + 로컬 LLM) ─────────────────────── -->
-            <TabItem Header="{x:Static res:Strings.ModelKindTranslation}">
-                <DockPanel LastChildFill="True">
+                <DockPanel Grid.Row="1" LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{x:Static res:Strings.ModelKindTranslation}"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               Margin="2,4,0,0" />
                     <TextBlock DockPanel.Dock="Top"
                                Text="{x:Static res:Strings.ModelStepTranslationHint}"
                                Style="{StaticResource HintText}"
                                Margin="4,8,0,6" />
 
                     <DataGrid ItemsSource="{Binding Source={StaticResource TranslationModels}}"
-                              SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                              SelectedItem="{Binding SelectedTranslationModel, Mode=TwoWay}"
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               CanUserDeleteRows="False"
@@ -249,6 +315,7 @@
                               SelectionUnit="FullRow"
                               HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#ECEEF2"
                               RowHeaderWidth="0"
                               RowHeight="28"
                               EnableRowVirtualization="True"
@@ -258,6 +325,22 @@
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
 
                         <DataGrid.Columns>
+
+                            <!-- 사용: the model this step runs with; only installed models can be picked -->
+                            <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnInUse}" Width="48" CanUserSort="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <RadioButton HorizontalAlignment="Center"
+                                                     VerticalAlignment="Center"
+                                                     GroupName="{Binding Id}"
+                                                     IsChecked="{Binding IsInUse, Mode=OneWay}"
+                                                     IsEnabled="{Binding IsInstalled}"
+                                                     ToolTip="{x:Static res:Strings.ModelUseRadioTooltip}"
+                                                     Command="{Binding DataContext.UseModelCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                     CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <!-- 이름 -->
                             <DataGridTemplateColumn Header="{x:Static res:Strings.ModelColumnName}" Width="340">
@@ -282,7 +365,19 @@
                             <!-- 상태 -->
                             <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnState}"
                                                 Binding="{Binding StateText}"
-                                                Width="100" />
+                                                Width="100">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsInstalled}" Value="True">
+                                                <Setter Property="Foreground" Value="#1F7A33" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
                             <!-- 크기 -->
                             <DataGridTextColumn Header="{x:Static res:Strings.ModelColumnSize}"
@@ -362,9 +457,8 @@
                         </DataGrid.GroupStyle>
                     </DataGrid>
                 </DockPanel>
-            </TabItem>
 
-        </TabControl>
+        </Grid>
 
     </DockPanel>
 </Window>

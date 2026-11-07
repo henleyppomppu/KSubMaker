@@ -364,14 +364,16 @@ def test_cancellation_stops_mid_stream(tmp_path: Path) -> None:
         transcriber.transcribe(audio, token=token, on_progress=cancel_after_two)
 
 
-def test_an_empty_transcript_is_an_error_not_an_empty_success(tmp_path: Path) -> None:
-    # An empty result would silently produce an empty subtitle file.
+def test_an_empty_transcript_is_no_speech_not_an_empty_success(tmp_path: Path) -> None:
+    # An empty result would silently produce an empty subtitle file — but a silent track is not a
+    # failure either, so it gets its own code the host shows as 음성 없음.
     transcriber, audio = _prepared(FakeModel([]), tmp_path)
 
     with pytest.raises(errors.WorkerError) as excinfo:
         transcriber.transcribe(audio)
 
-    assert excinfo.value.code == errors.TRANSCRIPTION_FAILED
+    assert excinfo.value.code == errors.NO_SPEECH
+    assert excinfo.value.recoverable is False, "retrying a silent track finds the same silence"
 
 
 def test_a_missing_audio_file_is_an_error(tmp_path: Path) -> None:
@@ -530,3 +532,119 @@ def test_segments_from_json_tolerates_junk() -> None:
     assert segments_from_json({}) == []
     assert segments_from_json({"segments": "not a list"}) == []
     assert segments_from_json({"segments": [{"id": 1}, "junk"]}) == [{"id": 1}]
+
+
+# ---------------------------------------------------------------------------
+# Long audio is recognised in windows
+# ---------------------------------------------------------------------------
+
+
+def _write_wav(path: Path, seconds: float, quiet_at: list[float]) -> None:
+    """16 kHz mono 16-bit noise with 0.2 s of silence centred on each ``quiet_at`` second."""
+    import wave
+
+    import numpy as np
+
+    rate = 16_000
+    rng = np.random.default_rng(0)
+    samples = (rng.uniform(-0.5, 0.5, int(seconds * rate)) * 32767).astype("<i2")
+    for centre in quiet_at:
+        samples[int((centre - 0.1) * rate) : int((centre + 0.1) * rate)] = 0
+    with wave.open(str(path), "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(rate)
+        writer.writeframes(samples.tobytes())
+
+
+class WindowModel:
+    """Answers every window with one segment at 0.5–1.0 s of *that window*, and records the calls."""
+
+    def __init__(self, languages: list[str] | None = None, empty: set[int] | None = None) -> None:
+        self.calls: list[tuple[Any, dict[str, Any]]] = []
+        self.languages = languages or []
+        self.empty = empty or set()
+
+    def transcribe(self, audio, **kwargs):  # noqa: ANN001, ANN201
+        number = len(self.calls)
+        self.calls.append((audio, kwargs))
+        language = self.languages[number] if number < len(self.languages) else "ko"
+        segments = [] if number in self.empty else [
+            FakeSegment(0.5, 1.0, f"w{number}", [FakeWord(f" w{number}", 0.5, 0.9)])
+        ]
+        return iter(segments), FakeInfo(language=language, duration=len(audio) / 16_000)
+
+
+def _windowed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, model: Any, seconds: float, quiet_at: list[float]):
+    from ksubmaker_worker import transcriber as module
+
+    monkeypatch.setattr(module, "LONG_AUDIO_SECONDS", 3)
+    monkeypatch.setattr(module, "WINDOW_SECONDS", 3)
+    monkeypatch.setattr(module, "CUT_SEARCH_SECONDS", 1)
+
+    transcriber, _ = _prepared(model, tmp_path)
+    audio = tmp_path / "long.wav"
+    _write_wav(audio, seconds, quiet_at)
+    return transcriber, str(audio)
+
+
+def test_long_audio_is_recognised_in_windows_cut_at_the_quiet_spot(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A 3h22m lecture died allocating one 3.8 GB spectrogram for the whole track (2026-11-02)."""
+    model = WindowModel()
+    transcriber, audio = _windowed(monkeypatch, tmp_path, model, 8.0, quiet_at=[2.45, 5.25])
+
+    result = transcriber.transcribe(audio, language="ko")
+
+    # Targets at 3 s and (2.45 + 3) s; each cut moved back into the silence before it.
+    lengths = [len(call[0]) / 16_000 for call in model.calls]
+    assert len(lengths) == 3
+    assert lengths[0] == pytest.approx(2.45, abs=0.06)
+    assert sum(lengths) == pytest.approx(8.0)
+
+    starts = [segment["start"] for segment in result["segments"]]
+    assert starts == pytest.approx([0.5, 2.45 + 0.5, 5.25 + 0.5], abs=0.06)
+    assert [segment["id"] for segment in result["segments"]] == [1, 2, 3]
+    word = result["segments"][1]["words"][0]
+    assert word["start"] == pytest.approx(2.45 + 0.5, abs=0.06)
+    assert result["durationSeconds"] == pytest.approx(8.0)
+
+
+def test_only_the_first_window_gets_the_hint_and_the_language_found_is_kept(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    model = WindowModel(languages=["ja", "en", "en"])
+    transcriber, audio = _windowed(monkeypatch, tmp_path, model, 8.0, quiet_at=[2.45, 5.25])
+
+    result = transcriber.transcribe(audio, language="auto")
+
+    options = [call[1] for call in model.calls]
+    assert options[0]["language"] is None
+    assert [o["language"] for o in options[1:]] == ["ja", "ja"], "later windows must not re-guess"
+    assert [o["initial_prompt"] for o in options[1:]] == [None, None]
+    assert result["sourceLanguage"] == "ja"
+
+
+def test_a_silent_opening_window_does_not_decide_the_language(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    model = WindowModel(languages=["en", "ko", "ko"], empty={0})
+    transcriber, audio = _windowed(monkeypatch, tmp_path, model, 8.0, quiet_at=[2.45, 5.25])
+    reported: list[str] = []
+
+    result = transcriber.transcribe(audio, language="auto", on_language=lambda code, _p: reported.append(code))
+
+    assert model.calls[1][1]["language"] is None
+    assert model.calls[2][1]["language"] == "ko"
+    assert result["sourceLanguage"] == "ko"
+    assert reported == ["en", "ko"]
+
+
+def test_short_audio_is_still_handed_over_as_a_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    model = WindowModel()
+    transcriber, audio = _windowed(monkeypatch, tmp_path, model, 2.0, quiet_at=[])
+
+    transcriber.transcribe(audio, language="ko")
+
+    assert model.calls[0][0] == audio

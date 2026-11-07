@@ -458,7 +458,7 @@ CPU·RAM·디스크는 호스트가 정본입니다. 워커가 답하지 못하�
 
 | 필드 | 타입 | 필수 | 의미 |
 | --- | --- | --- | --- |
-| `code` | string | ✔ | `ErrorCodes`의 값 22개 중 하나 |
+| `code` | string | ✔ | `ErrorCodes`의 값 25개 중 하나 |
 | `message` | string | ✔ | **한국어**. 사용자에게 그대로 보여도 되는 문장 |
 | `recoverable` | bool | ✔ | true면 호스트가 자동 재시도해도 됨 |
 | `detail` | string? | | 기술적 세부. **최대 4000자로 잘립니다.** UI에 그대로 나가지 않고 로그로만 갑니다 |

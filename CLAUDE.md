@@ -11,7 +11,7 @@ Claude Code가 이 저장소에서 작업을 이어갈 때 **가장 먼저 읽�
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 구조, 데이터 흐름, 처리 방식 A/B/C, 알려진 제한사항 |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR 31건. **되돌리기 전에 반드시 확인** |
 | [`docs/WORKER_PROTOCOL.md`](docs/WORKER_PROTOCOL.md) | JSON Lines 프로토콜 v1.5 전체 명세 |
-| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | 오류 코드 24개별 증상 → 원인 → 해결 |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | 오류 코드 25개별 증상 → 원인 → 해결 |
 
 ---
 
@@ -21,7 +21,7 @@ Claude Code가 이 저장소에서 작업을 이어갈 때 **가장 먼저 읽�
 WPF(.NET 10) UI와 Python AI Worker를 **별도 프로세스**로 분리하고 stdio JSON Lines로 통신합니다.
 
 - C# 191파일 · Python 39파일 · XAML 8파일 · 커밋 64개 (2026-09-26 실측)
-- 버전 **1.1.0** · 프로토콜 **v1.5** · EF Core 마이그레이션 3건
+- 버전 **1.1.0** · 프로토콜 **v1.5** · EF Core 마이그레이션 4건
 - 테스트 **C# 1,903(단위 1,718 + 통합 185) / Python 754**, Release 빌드 경고 0
 
 > **테스트 수치 주의.** 위 "전부 통과"는 **Linux/CI 기준**입니다. 실기(Windows)에서 그대로
@@ -441,6 +441,183 @@ ROCm/DirectML/Vulkan을 지원하려면 CTranslate2를 대체해야 하므로 §
     - 같은 세션에서 `changes.txt` 의 UNC 예시(`\서버\공유`)도 같은 이유로 두 번 깨졌습니다.
     - **셸 → 파이썬 → 파일을 거쳐 경로 리터럴을 써 넣지 마세요.** 꼭 해야 하면 heredoc
       (`<<'PY'`) + raw 문자열을 쓰고, 쓴 뒤에 `repr()` 로 실제 바이트를 확인하세요.
+
+이후 세션(2026-11-02):
+
+16. **자막이 이미 있는데 다시 검색해도 대기 상태가 그대로** — 강의 67편 옆에 완성된 `.srt`가
+    있는데도 전부 Whisper를 다시 돌기 시작했습니다. 두 가지가 겹쳤습니다.
+    - **이름만 보고 언어를 판정합니다.** `LooksKorean`은 `ko`·`kor`·`kr` 태그가 붙은 이름만
+      한국어로 칩니다. 사용자 라이브러리는 2,730개 중 2,329개가 태그 없는 `이름.srt`인데
+      설정의 언어 태그가 `ko`라서 출력 경로(`이름.ko.srt`)도 없고 사이드카도 "언어 불명"이라
+      전부 처리 대상이 됐습니다. 태그를 비우면 출력 경로가 일치해 피해 갑니다. 내용을 읽어
+      한글 비율로 판정하는 보강은 **아직 안 했습니다.**
+    - **이미 목록에 있는 작업은 완료로 바꾸지 않았습니다.** `JobFactory`의
+      `CompleteIfKoreanExists` 분기가 `existing != null`이면 무조건 `Unchanged`를 돌려줬고,
+      그걸 고정하는 테스트까지 있었습니다(`…is_left_alone`). 그래서 태그를 고치고 다시
+      검색해도 Pending 66건이 그대로 남아 큐를 돌리면 또 처리했습니다. 이제 완료·실행 중·
+      일시정지가 아닌 작업(Pending/Failed/Cancelled/Skipped)은 **제자리에서 완료로** 바꾸고
+      `AlreadyDone`을 돌려줍니다. 큐는 `AlreadyDone`이 기존 행이면 `UpdateRange`, 새 행이면
+      `AddRange`로 갈라 저장합니다 — 전에는 `AlreadyDone`을 무조건 삽입으로 다뤘습니다.
+    → 가드: `JobFactoryTests.An_already_queued_file_that_is_not_running_is_marked_done_when_korean_exists`,
+    `RescanAlreadyDoneTests`.
+17. **음성 인식 0%에서 진행 없이 멈춤** — 7분짜리 영상이 "음성 인식 10% / 단계 0%"에서 10분
+    넘게 멈췄습니다. 워커는 살아 있고 CPU·GPU 사용은 0이었습니다. `py-spy dump`로 본 작업
+    스레드는 `transcriber._resolve_device` → `import ctranslate2` → `import numpy` →
+    `_multiarray_umath.pyd`의 **`LoadLibraryExW` 안에서** 대기 중이었고, 메인 스레드는 stdin
+    `ReadFile`, 같은 시각 미리 추출 레인이 다른 스레드에서 ffmpeg를 띄우고 있었습니다.
+    정확한 교착 상대는 잡지 못했습니다(비침습 cdb 부착으로는 다른 스레드 컨텍스트를 못 읽음).
+    분리한 재현 스크립트로는 재현되지 않았습니다 — 타이밍 의존입니다.
+    - 수정: `main.preload_native_modules()`가 CUDA DLL 등록 직후, 첫 명령을 읽기 **전에** 메인
+      스레드에서 numpy·ctranslate2·faster_whisper를 import합니다(약 0.15초). 작업 스레드가
+      네이티브 DLL을 매핑하는 창 자체를 없앤 것입니다. 실패해도 경고만 남기고 진행합니다.
+    - **실기 재발 여부 미검증.** 다시 멈추면 `py-spy dump --pid <워커 PID>`부터 뜨세요.
+    - 호스트 감시 타이머는 15분(`WorkerOptions.IdleTimeout`) 뒤에야 워커를 죽이고 재시도합니다.
+    - **그 자동 재시도가 0.0초 만에 실패하던 결함도 함께 고쳤습니다.** 감시 타이머가 보낸 합성
+      오류가 곧바로 재시도를 부르는데, `Process.Kill`은 프로세스가 죽기 전에 반환하므로
+      `StartAsync`가 죽어 가는 워커를 그대로 돌려줬습니다. 재시도는 거기에 구독했다가 옛 워커의
+      종료 이벤트로 실패했습니다(로그: `worker 작업 종료 … 0.0초`, 단계 `Probing`).
+      `WorkerProcessClient._condemned`로 사형 선고된 인스턴스는 재사용하지 않습니다.
+      → 가드: `A_start_requested_as_the_watchdog_fires_gets_a_fresh_worker`(수정을 빼면 실패 확인).
+    - 통합 테스트 스텁은 `python3`을 찾는데 Windows에는 없어 **Python 통합 테스트 52건이 스킵**되는
+      원인입니다. 실기에서 돌리려면 `python3.exe` 심볼릭 링크를 PATH 앞에 두세요. 그렇게 돌리면
+      `StartAsync_completes_the_ready_handshake` 1건이 스텁의 `PROTOCOL_VERSION`이 1.2에 머물러
+      실패합니다(기존 문제).
+    → 가드: `test_main_registers_the_cuda_dll_directories_before_the_first_command`(순서),
+    `test_preloading_imports_the_native_modules_and_never_raises`.
+18. **무음 영상이 빨간 "실패"로 남음** — 강의 두 편이 처음부터 끝까지 -91 dB 무음이었는데
+    `TRANSCRIPTION_FAILED`로 실패 처리됐습니다. 사용자 요청은 "실패가 아니라 음성이 없다,
+    만들 자막이 없다고 하면 된다"였습니다. 새 오류 코드 **`NO_SPEECH`**(C#·Python 양쪽,
+    재시도 안 함)를 워커가 Whisper 결과 0구간일 때 보내고, 큐는 이를 `Job.MarkNothingToDo`로
+    **`Skipped` + `ErrorCode=NO_SPEECH`** 로 남깁니다. 그리드 상태는 **음성 없음**, 실패 개수에
+    안 들어가고, `Skipped`라 다시 검색해도 재처리되지 않습니다(재시도는 가능).
+    오류 코드 값이 하나 늘었을 뿐 필드는 그대로라 프로토콜 버전은 올리지 않았습니다 — 모르는
+    코드를 받은 예전 호스트는 그냥 실패로 표시합니다. 문서의 "오류 코드 22개"는 이미 24개였던
+    것을 실제 개수(25)로 고쳤습니다.
+    → 가드: `AutoRetryTests.A_silent_track_is_parked_as_nothing_to_do_and_is_never_retried`,
+    `test_an_empty_transcript_is_no_speech_not_an_empty_success`.
+19. **목록이 늘기만 했음 — 폴더 선택/새로고침 동작 변경** (사용자 요청). **폴더를 바꾸면 목록을
+    교체하던 규칙은 23번에서 "보기만 바꾸기"로 대체됐습니다** — 아래는 당시 기록입니다. 예전에는 검색이 행을
+    더하거나 갱신만 하고 절대 빼지 않아, 다른 폴더를 고르면 목록에 덧붙고 지운 파일도 남았습니다.
+    - **폴더 선택** = 고르는 즉시 검색하고, 그 폴더에서 찾은 것만 남깁니다.
+    - **목록 새로고침**(같은 폴더) = 제자리 재검사 + 영상이 사라진 행 제거.
+    - "같은 폴더"는 목록을 만든 폴더(`_listFolder`, 재시작 시 `LastFolder`)와 비교합니다.
+      텍스트 상자에 다른 경로를 쳐서 새로고침해도 폴더 변경으로 취급합니다.
+    - **큐가 돌거나 일시정지 중에 폴더를 바꾸려 하면 알림을 띄웁니다**(버튼은 잠그지 않음 — 처음엔
+      회색으로 잠갔다가 "왜 안 되는지 알 수 없다"는 이유로 알림으로 바꿨습니다). 일시정지 중에는
+      같은 폴더 새로고침만 허용하고, 경로 입력칸은 잠급니다(`CanEditFolder`).
+    - 행 제거는 이어하기 캐시까지 지우므로(캐시는 작업 id에 묶여 있고, 시작 시 목록에 없는
+      id의 캐시는 청소됨 — "목록에서만 빼고 캐시는 남기기"는 지금 구조로는 의미가 없음),
+      다른 폴더에서 **진행하다 만 작업**이 빠질 때만 확인 창을 띄웁니다.
+    - 판단은 `QueueListReconciler`(Application, 순수)에 있고 실행 중 작업은 절대 빼지 않습니다.
+    - **실기 미검증.** WPF 부분은 컴파일만 확인했습니다.
+    → 가드: `QueueListReconcilerTests`.
+20. **목록 표시 순서가 처리 순서와 달랐음** — 원인이 둘이었습니다.
+    - 검색으로 생긴 새 행은 `_pendingUpdates`(`ConcurrentDictionary`)에 모였다가 그 열거 순서,
+      즉 **해시 순서**로 그리드에 붙었습니다. 재시작해야(`RebuildRows`는 정렬된
+      `JobQueueService.Jobs`를 읽음) 맞아졌습니다. 이제 `QueueOrder` 순으로 붙입니다.
+    - 새 작업 순번을 `_jobs.Count`부터 매겼습니다. 완료 항목 비우기 등으로 행을 지우면 개수가
+      최대 순번보다 작아져 **기존 행과 같은 순번**(181~185번이 두 벌)을 받았습니다. 그리드는 맨
+      밑에 붙이고 큐는 사이에 끼워 처리했습니다. 이제 최대 순번 + 1부터 매깁니다.
+    → 가드: `RescanAlreadyDoneTests.New_jobs_are_numbered_after_the_highest_existing_queue_order`.
+21. **자막 없이 1.1초 만에 "완료", 뒤 두 파일은 `PROTOCOL_ERROR`** — 미리 추출 레인은 다음
+    파일의 음성을 **그 작업의 id로** 뽑습니다(`extractAudio`). 그 파일의 `process`가 시작되면
+    작업은 추출이 끝나기를 기다리고, 추출이 끝나면 `extractAudio` 요청이 `completed`(skipped,
+    산출물 없음)를 보내는데 여기에 그 작업 id가 붙어 있습니다. `WorkerJobProcessor`가 **작업 id만**
+    비교해서 이것을 작업 완료로 받았습니다. 작업은 자막 없이 완료 처리됐고, 워커에서는 진짜
+    작업이 계속 돌아 다음 `process` 두 건이 "이미 실행 중인 작업"으로 거절됐습니다.
+    - 수정: process 명령의 **요청 id까지** 맞는 이벤트만 받습니다(요청 id 없는 합성 오류는 예외).
+    - **처음엔 "스레드 정리 중 경합"으로 오진**하고 워커에 최대 5초 대기를 넣었습니다. 그것만으로는
+      이 사고가 막히지 않습니다. 진짜 완료 뒤의 짧은 겹침을 막는 보조 장치로 남겨 두었습니다
+      (`Worker.JOB_HANDOFF_GRACE_SECONDS`).
+    - 교훈: "완료"인데 산출물이 없으면 완료 신호의 **출처**부터 의심하세요.
+    → 가드: `A_completed_event_from_another_request_for_the_same_job_is_ignored`(수정을 빼면 실패),
+    `test_a_job_sent_while_the_previous_thread_is_still_unwinding_is_accepted`.
+22. **스크롤바를 끌면 목록이 심하게 버벅임** (휠은 괜찮음). UI Automation으로 스크롤 위치를
+    임의로 크게 건너뛰며 재 보니 한 화면을 새로 그리는 데 **p95 약 0.16~0.18초**였습니다(186행).
+    휠은 몇 줄만 새로 만들지만 끌기는 마우스 이동마다 화면 전체를 다시 만들어 쌓입니다.
+    - **원인은 레이아웃이 아니라 UI Automation이었습니다.** `dotnet-trace`
+      (`dotnet-sampled-thread-time`)로 보니 레이아웃은 약 0.15%, 매 레이아웃 뒤
+      `ContextLayoutManager.fireAutomationEvents → AutomationPeer.UpdateSubtree`가 그 15배쯤
+      — 시스템의 어떤 UIA 구독자(입력기 호스트, 상주 앱) 때문에 WPF가 실현된 모든 행·칸의
+      자동화 트리를 매번 다시 만들었습니다.
+    - 수정: `Controls/JobGrid`(DataGrid 하위 클래스)가 **자식 없는** 자동화 피어를 냅니다.
+      `DataGridAutomationPeer`는 sealed라 `FrameworkElementAutomationPeer`를 상속하고 Scroll
+      패턴만 내부 `ScrollViewer`에 연결했습니다. 화면 낭독기로 칸 단위 탐색은 안 됩니다.
+      결과: 건너뛰기 p95 **0.18초 → 0.03~0.07초**, 최대 0.22초 → 0.07~0.11초, 프로파일에서
+      `UpdateSubtree` 소멸.
+    - **처음엔 추측으로 고쳤다가 되돌렸습니다.** 지연 스크롤(`IsDeferredScrollingEnabled`,
+      끌고 놓아야 보임 — 사용자가 "버그 고치랬더니 기능을 바꿨다"고 거절), 행 툴팁 제거,
+      진행 막대 평면 템플릿, `ScrollUnit=Item`은 전부 원복했습니다. 측정 없이 고치지 마세요.
+    측정 스크립트는 세션 스크래치에만 있었습니다(UIA `ScrollPattern.SetScrollPercent`를 임의 위치로
+    반복하고 `VerticalScrollPercent`를 읽어 왕복 시간을 잼).
+    - 같은 때 "선택" 열 머리글을 정렬 대신 **전체 선택/해제 체크박스**로 바꿨습니다
+      (`MainViewModel.AllChecked`, 일부만 선택이면 중간 표시).
+
+23. **폴더 트리 + 재생목록** (사용자 요청, 기능 추가). 목록이 "넣은 것이 쌓이는 통"이라
+    작업 중에는 다른 폴더를 볼 수조차 없었습니다.
+    - **목록은 이제 보기입니다.** 큐는 그동안 연 모든 폴더의 작업을 갖고, 그리드는 고른 폴더
+      (하위 폴더 포함 설정을 따름) 또는 재생목록의 행만 보여 줍니다(`MainViewModel.IsVisible`).
+      폴더를 바꿔도 행을 지우지 않으므로 작업 중에도 바꿀 수 있습니다. 19번의 "다른 폴더면 행
+      제거 + 확인 창"과 "작업 중 폴더 변경 금지"는 없앴습니다.
+    - **전체 실행은 보이는 것만** 돌립니다. id 목록이 아니라 조건(`StartAsync(..., scope)`)으로
+      거는 이유는 실행 중 새로고침으로 그 폴더에 들어온 파일도 차례가 오게 하려는 것입니다.
+    - **실행 중 새로고침의 경합.** 새로고침이 대기 작업을 "자막 있음 → 완료"로 바꾸는 순간 펌프가
+      그 작업을 집으면 완료된 작업이 다시 돕니다. 펌프는 잠금 없이 다음 작업을 고르므로,
+      `RunJobAsync`가 시작 상태 전이를 `EnqueueAsync`와 같은 `_mutationLock` 안에서 하고 이미
+      끝난 작업은 건너뜁니다. **이 정확한 순간은 테스트로 재현하지 못했습니다**
+      (`FolderScopedRunTests`는 결과 동작만 고정합니다).
+    - 완료 항목 비우기는 작업 중에도 됩니다. 완료된 작업은 펌프도 미리 추출 레인
+      (`UnfinishedInQueueOrder`는 종료 상태를 뺌)도 더는 안 봅니다.
+    - **재생목록은 참조입니다.** 재생목록 보기에서 제거·완료 비우기는 재생목록에서 빼기만 하고,
+      작업·캐시·자막은 그대로입니다. 테이블 `Playlists`·`PlaylistEntries`(마이그레이션
+      `AddPlaylists`). 큐는 작업을 `ExecuteDelete`로 지워 EF 추적을 우회하므로 **멤버십 정리는
+      DB의 cascade가 합니다** — SQLite 실파일 통합 테스트(`PlaylistPersistenceTests`)로 확인했습니다.
+    - 드라이브 루트를 고르면 보기만 바꾸고 자동 검색하지 않습니다(하위 폴더 포함이면 드라이브
+      전체를 훑음). 재생목록에서 목록 새로고침은 영상이 있는 폴더를 하나씩(하위 폴더 없이) 검색합니다.
+    - 함정: **Bash 도구는 따옴표 heredoc 안의 백슬래시도 반으로 줄입니다**(`'\\'`가 `'\'`가 돼
+      컴파일 오류). 15번과 같은 종류입니다. 경로·문자 리터럴은 파일로 써서 넣으세요.
+    - **실기 미검증.** WPF 화면(트리, 재생목록 패널, 오른쪽 클릭 메뉴)은 컴파일만 확인했습니다.
+
+24. **폴더 검색이 수십 초** — 영상마다 자막 파일을 찾으려고 폴더 목록을 처음부터 다시 읽었습니다.
+    네트워크 드라이브에서 한 번 읽는 데 0.14초인데 영상 467개 폴더면 467번 → 약 50초(실측 로그:
+    영상 701개 폴더 "목록 67.1초"). 폴더는 한 번만 읽고 그 목록(`IFileSystem.EnumerateFileEntries`,
+    크기·수정 시각·숨김 여부가 같이 옴)을 재사용합니다. 수정 후 실기 로그: 영상 434개 "목록 0.2초".
+    - 단계별 시간이 로그에 남습니다: `폴더 검색 …: 영상 n개 — 목록 x초, 등록 y초, 파일 정보 확인 k개 z초`.
+      느리다는 말이 나오면 이 줄부터 보세요. 파일 정보 확인(ffprobe, 약 0.07초/개)은 새 파일만 한 번.
+    → 가드: `VideoScanServiceTests.A_folder_is_listed_once_however_many_videos_it_holds`(수정을 빼면 41번
+    읽어 실패). **처음 쓴 가드는 수정 없이도 통과했습니다** — 옛 코드가 `\videos`로 읽어 다른 키에
+    쌓였기 때문. 가드는 수정을 빼고 실패하는 것까지 보세요.
+25. **진행률 막대 하나로** — "전체/단계" 두 막대가 같은 단위처럼 보여 헷갈렸습니다. 막대는 작업 전체,
+    글자는 "음성 인식 13%"(실제로 측정되는 값). 단계 비중(2/8/55/32/3)은 작업이 건너뛴 단계를 빼고
+    다시 100%로 나눕니다(`Job.SkippedStages`, 한국어 감지 시 번역 제외). 앞으로 할 단계만 빼므로 막대는
+    뒤로 가지 않습니다. 남은 시간은 이번 실행의 진행분으로 계산합니다(이어하기·미리 추출된 작업이
+    "곧 끝남"으로 나오던 것). 비중 자체는 여전히 추정치입니다 — 실측으로 맞춘 적 없음.
+26. **화면 정리** — 위쪽은 실행·모델·목록 묶음만, 나머지는 메뉴(파일/보기/작업/도구/설정/정보)와 오른쪽
+    클릭. 폴더를 옮길 때 결과는 창이 아니라 상태 표시줄에만(공유 플래그로 끄던 첫 시도는 빠른 연속
+    클릭에서 경합으로 창이 다시 떴습니다). 새로고침(F5)은 폴더 트리도 다시 읽습니다.
+    - **실기 PC는 Windows 손잡이 설정이 "오른손잡이"라 WPF 메뉴가 왼쪽으로 펼쳐집니다.** 시작 시
+      `SystemParameters._menuDropAlignment`를 끕니다(`App.OpenMenusRightward`, 비공개 필드 우회).
+27. **모델 선택** — 실행 옆 "모델" 드롭다운(설치된 것만, 번역은 NLLB·LLM 한 목록, 고르면 엔진도 같이)과
+    모델 관리의 "사용" 라디오. 다음 시작부터 적용(실행은 시작 때 설정을 고정). 모델 관리는 음성 인식 위,
+    번역 아래로 한 화면, 삭제·검증은 설치된 모델만.
+28. **자막 보기** — 완료된 줄의 "자막 보기"가 앱 안의 표 창을 엽니다. 시간은 읽기 전용, 글자만 고치고
+    파이프라인과 같은 원자적 쓰기로 저장. `SrtParser`를 새로 만들었고 실제 자막 3개로 읽기·무수정
+    재저장이 원본과 같음을 확인했습니다. 모달이 아닌 창이라 닫기 버튼에 `IsCancel`을 쓰면 **동작하지
+    않습니다**(ShowDialog 전용).
+    - 곁가지 함정 둘: 창 생성자에서 `InitializeComponent` 전에 이름 붙은 요소를 쓰면 **앱이 시작하지
+      못합니다**(실제로 한 번 냈음). Bash 도구의 heredoc은 따옴표로 막아도 `\\`를 `\`로 줄입니다 — §6.15.
+29. **긴 강의가 `MemoryError`로 실패** — 3시간 22분 강의가 "음성 인식을 시작하지 못했습니다"로 실패했고 로그
+    원인은 `MemoryError((1, 1181453, 201), dtype('complex128'))`였습니다. faster-whisper는 VAD로 무음을 뺀
+    **나머지 전체**를 스펙트로그램 하나로 만든 뒤 디코딩하므로, 말이 많은 3시간이면 그 배열 하나가 3.8GB입니다.
+    같은 날 11시간 36분짜리는 성공했습니다 — 대부분 무음이라 VAD 뒤에 남은 게 적었기 때문입니다. 즉 길이가
+    아니라 **말이 있는 시간**이 문제이고, 그때 남은 메모리에 따라 되기도 안 되기도 합니다.
+    - 수정: wav가 45분을 넘으면 30분 단위 창으로 나눠 인식하고 시간을 더합니다(`transcriber._plan_windows`).
+      자르는 곳은 목표 지점 앞 60초 안에서 가장 조용한 0.1초 블록의 가운데입니다. 언어는 말이 있는 첫 창에서
+      정하고 나머지 창에 고정, `initial_prompt`는 첫 창에만 줍니다(원래도 도입부에만 닿음). 45분 이하는 예전처럼
+      경로를 그대로 넘깁니다.
+    - 실제 실패 파일의 wav로 창 계획만 확인했습니다(7개 창, 0.2초). **창으로 나눈 실제 인식은 실기 미검증**입니다 —
+      경계에서 문장이 갈리거나 겹치지 않는지 사람이 한 번 봐야 합니다.
+    → 가드: `test_long_audio_is_recognised_in_windows_cut_at_the_quiet_spot` 외 3건.
 
 **패턴**: 실패한 것들은 전부 *자동 테스트가 통과하는데 실기에서 깨지는* 종류였습니다.
 플랫폼 차이(PS 5.1 vs pwsh 7), 외부 서비스의 실제 응답, GPU 유무. 새 기능을 넣을 때

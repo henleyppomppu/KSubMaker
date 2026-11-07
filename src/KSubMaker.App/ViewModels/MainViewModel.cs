@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly SettingsService _settingsService;
     private readonly VideoScanService _scanService;
     private readonly JobQueueService _queue;
+    private readonly PlaylistService _playlists;
     private readonly HardwareService _hardwareService;
     private readonly IModelManager _models;
     private readonly ModelCatalog _catalog;
@@ -81,6 +82,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SettingsService settingsService,
         VideoScanService scanService,
         JobQueueService queue,
+        PlaylistService playlists,
         HardwareService hardwareService,
         IModelManager models,
         ModelCatalog catalog,
@@ -95,6 +97,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settingsService = settingsService;
         _scanService = scanService;
         _queue = queue;
+        _playlists = playlists;
         _hardwareService = hardwareService;
         _models = models;
         _catalog = catalog;
@@ -112,10 +115,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
         Jobs = [];
+        FolderTree.FolderSelected += (_, path) => _ = NavigateToFolderAsync(path);
     }
 
-    /// <summary>Rows shown in the grid, in queue order.</summary>
+    /// <summary>
+    /// Rows shown in the grid, in queue order: the jobs of the folder being viewed. The queue holds
+    /// jobs from every folder opened so far; rows for the others exist (in <c>_rowsById</c>) but are
+    /// not in this collection.
+    /// </summary>
     public BulkObservableCollection<JobRowViewModel> Jobs { get; }
+
+    /// <summary>The explorer-style folder tree on the left. Picking a folder there switches the view.</summary>
+    public FolderTreeViewModel FolderTree { get; } = new();
 
     /// <summary>큐 완료 후 동작 choices for the command-bar dropdown, in enum order.</summary>
     public IReadOnlyList<Option<PostQueueAction>> PostQueueActions { get; } =
@@ -171,8 +182,61 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _includeSubfolders = true;
 
+    // Which rows belong to the folder depends on it, so the view follows the checkbox at once.
+    partial void OnIncludeSubfoldersChanged(bool value) => ApplyView();
+
     [ObservableProperty]
     private bool _includeHiddenFolders;
+
+    /// <summary>
+    /// 보기 → 완료 항목 숨기기. A view setting, not an action: the jobs stay in the queue and in their
+    /// playlists, only their rows leave the screen — including a job that finishes while it is on.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHiddenCompleted))]
+    private bool _hideCompleted;
+
+    partial void OnHideCompletedChanged(bool value)
+    {
+        ApplyView();
+
+        // Equal to the live setting means ApplySettings is echoing a save back.
+        if (value == _settings.HideCompletedJobs)
+        {
+            return;
+        }
+
+        var updated = _settingsService.Current;
+        updated.HideCompletedJobs = value;
+        _ = PersistHideCompletedAsync(updated);
+    }
+
+    private async Task PersistHideCompletedAsync(AppSettings updated)
+    {
+        try
+        {
+            await _settingsService.SaveAsync(updated).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "완료 항목 숨기기 설정을 저장하지 못했습니다.");
+        }
+    }
+
+    /// <summary>Completed jobs of the current view kept off the screen by <see cref="HideCompleted"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HiddenCompletedText))]
+    [NotifyPropertyChangedFor(nameof(HasHiddenCompleted))]
+    private int _hiddenCompletedCount;
+
+    /// <summary>Shown beside the view title so rows never vanish without a word.</summary>
+    public bool HasHiddenCompleted => HideCompleted && HiddenCompletedCount > 0;
+
+    public string HiddenCompletedText =>
+        string.Format(CultureInfo.CurrentCulture, Strings.HiddenCompletedFormat, HiddenCompletedCount);
+
+    [RelayCommand]
+    private void ShowCompleted() => HideCompleted = false;
 
 
     // -----------------------------------------------------------------------
@@ -187,11 +251,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RemoveCompletedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(CanReturnToRunningView))]
     private QueueState _queueStatus = QueueState.Idle;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelScanCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
@@ -206,6 +272,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StartTestCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelModelPreparationCommand))]
     private bool _isPreparingModels;
 
@@ -302,10 +369,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool IsQueueRunning => QueueStatus is QueueState.Running or QueueState.Pausing or QueueState.Stopping;
 
+    /// <summary>
+    /// Not gated on the queue: pressed while work is running, the command explains why it will not
+    /// scan (<see cref="ScanAsync"/>) rather than the button silently going grey.
+    /// </summary>
     private bool CanScan =>
-        !IsScanning && !IsQueueRunning && !IsPreparingModels && !string.IsNullOrWhiteSpace(TargetFolder);
+        !IsScanning && !IsPreparingModels && !string.IsNullOrWhiteSpace(TargetFolder);
+
+    /// <summary>Same idea for 폴더 선택: clickable, and it explains itself when it cannot act.</summary>
+    private bool CanBrowseFolder => !IsScanning && !IsPreparingModels;
 
     private bool CanCancelScan => IsScanning;
+
+    /// <summary>
+    /// The folder the grid is showing. Null only before any folder was ever opened, and then every
+    /// job is shown.
+    /// </summary>
+    private string? _listFolder;
+
+    /// <summary>Completes when the scan or drop in flight (if any) has finished, so a navigation can wait it out.</summary>
+    private Task _scanFinished = Task.CompletedTask;
+
+    /// <summary>Bumped per navigation; a navigation that waited on a scan gives up if a newer one started.</summary>
+    private int _navigation;
 
     private bool CanStart => !IsQueueRunning && !IsScanning && !IsPreparingModels;
 
@@ -314,8 +400,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool CanPause => QueueStatus == QueueState.Running;
 
     private bool CanStop => IsQueueRunning;
-
-    private bool CanRemoveCompleted => !IsQueueRunning;
 
     // The four selection-driven commands answer "is anything I could act on selected right now?".
     // A greyed-out button tells the user that before the click; the alert inside each command is the
@@ -346,6 +430,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _queue.QueueDrained += OnQueueDrained;
             _settingsService.SettingsChanged += OnSettingsChanged;
             _hardwareService.ProfileChanged += OnHardwareProfileChanged;
+            _playlists.Changed += OnPlaylistsChanged;
             _subscribed = true;
         }
 
@@ -355,6 +440,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RebuildRows(_queue.Jobs);
         QueueStatus = _queue.State;
         StatusMessage = Strings.ReadyMessage;
+
+        SyncPlaylists();
+        OnViewChanged();
+        _ = InitializeFolderTreeAsync();
+        _ = RefreshModelChoicesAsync();
 
         try
         {
@@ -424,29 +514,124 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _queue.QueueDrained -= OnQueueDrained;
         _settingsService.SettingsChanged -= OnSettingsChanged;
         _hardwareService.ProfileChanged -= OnHardwareProfileChanged;
+        _playlists.Changed -= OnPlaylistsChanged;
     }
 
     // -----------------------------------------------------------------------
     // Commands: folder + scan
     // -----------------------------------------------------------------------
 
-    [RelayCommand]
-    private void BrowseFolder()
+    /// <summary>
+    /// 폴더 선택: picking a folder is asking to see that folder, so the view switches to it and the
+    /// scan runs at once — no separate 목록 새로고침 click. Same as picking it in the tree.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanBrowseFolder))]
+    private async Task BrowseFolderAsync()
     {
         var picked = _dialogs.PickFolder(Strings.SelectFolderDialogTitle, TargetFolder);
-        if (!string.IsNullOrWhiteSpace(picked))
+        if (string.IsNullOrWhiteSpace(picked))
         {
-            TargetFolder = picked;
+            return;
+        }
+
+        await NavigateToFolderAsync(picked).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="folder"/> and re-checks it. Allowed while the queue runs — the jobs of
+    /// the folder being left keep running and are back on screen when the user returns to it. A scan
+    /// still in flight for the previous folder is cancelled first.
+    ///
+    /// A drive root is shown but not scanned: with 하위 폴더 포함 that would walk the whole drive
+    /// (the library drive holds thousands of files). 목록 새로고침 still scans it on request.
+    /// </summary>
+    private async Task NavigateToFolderAsync(string folder)
+    {
+        var ticket = ++_navigation;
+
+        if (IsScanning)
+        {
+            _scanCts?.Cancel();
+            await _scanFinished.ConfigureAwait(true);
+            if (ticket != _navigation)
+            {
+                return;
+            }
+        }
+
+        if (IsPreparingModels)
+        {
+            return;
+        }
+
+        TargetFolder = folder;
+        ShowFolder(folder);
+
+        if (IsDriveRoot(folder))
+        {
+            StatusMessage = Strings.DriveRootNotScannedMessage;
+            return;
+        }
+
+        await ScanFolderAsync().ConfigureAwait(true);
+    }
+
+    private static bool IsDriveRoot(string folder)
+    {
+        var trimmed = folder.Trim().TrimEnd('\\', '/');
+        var root = Path.GetPathRoot(folder.Trim())?.TrimEnd('\\', '/');
+        return !string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Switches the grid to <paramref name="folder"/> and points the tree at it.</summary>
+    private void ShowFolder(string folder)
+    {
+        if (_viewPlaylistId is null && QueueListReconciler.IsSameFolder(folder, _listFolder))
+        {
+            return;
+        }
+
+        _viewPlaylistId = null;
+        SelectedPlaylist = null;
+        _listFolder = folder;
+        OnViewChanged();
+        ApplyView();
+        _ = FolderTree.RevealAsync(folder);
+    }
+
+    private async Task InitializeFolderTreeAsync()
+    {
+        try
+        {
+            await FolderTree.LoadDrivesAsync().ConfigureAwait(true);
+            await FolderTree.RevealAsync(_listFolder).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "폴더 트리를 불러오지 못했습니다.");
         }
     }
 
+    /// <summary>
+    /// 목록 새로고침 (and the second half of every folder switch): shows the folder, finds its videos,
+    /// re-checks their subtitles and drops the rows whose video is gone. Runs while the queue does —
+    /// the queue claims each job under the same lock the enqueue takes, so a job marked 완료 here is
+    /// never started, and one already running is left untouched.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync()
     {
-        if (IsQueueRunning)
+        // 새로고침 (F5, 파일 메뉴, the ⟳ above the list): the tree is re-read too, so a folder made
+        // or deleted in Explorer shows up. Moving to a folder does not need that and skips it.
+        _ = FolderTree.RefreshAsync();
+        await ScanFolderAsync().ConfigureAwait(true);
+    }
+
+    private async Task ScanFolderAsync()
+    {
+        if (_viewPlaylistId is { } playlistId)
         {
-            StatusMessage = Strings.QueueBusyCannotScan;
-            _dialogs.ShowWarning(Strings.QueueBusyCannotScan);
+            await RunBusyAsync(token => RefreshPlaylistAsync(playlistId, token)).ConfigureAwait(true);
             return;
         }
 
@@ -464,8 +649,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        ShowFolder(folder);
+
         var cts = new CancellationTokenSource();
         Interlocked.Exchange(ref _scanCts, cts)?.Dispose();
+        var finished = new TaskCompletionSource();
+        _scanFinished = finished.Task;
         IsScanning = true;
 
         try
@@ -482,12 +671,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             };
 
             // ScanAsync already hops onto the thread pool; awaiting it keeps the UI live.
+            var timer = System.Diagnostics.Stopwatch.StartNew();
             var report = await _scanService.ScanAsync(request, cts.Token).ConfigureAwait(true);
+            var listed = timer.Elapsed;
+
+            var removedCount = await RemoveVanishedAsync(cts.Token).ConfigureAwait(true);
 
             if (report.Files.Count == 0)
             {
                 StatusMessage = Strings.ScanNoFilesFound;
-                _dialogs.ShowInformation(Strings.ScanNoFilesFound);
                 return;
             }
 
@@ -499,10 +691,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 report.Elapsed.TotalSeconds);
 
             var results = await _queue.EnqueueAsync(report.Files, settings, cts.Token).ConfigureAwait(true);
+            var enqueued = timer.Elapsed;
 
             await ProbeNewlyQueuedAsync(report.Files, results, cts.Token).ConfigureAwait(true);
 
-            ShowEnqueueSummary(results);
+            // Where a slow folder spends its time. Only new files are probed, once each: jobs are
+            // kept across restarts and across folder switches, so a second visit skips that part.
+            _logger.LogInformation(
+                "폴더 검색 {Folder}: 영상 {Files}개 — 목록 {Listed:0.0}초, 등록 {Enqueued:0.0}초, 파일 정보 확인 {Probed}개 {Probing:0.0}초",
+                folder,
+                report.Files.Count,
+                listed.TotalSeconds,
+                (enqueued - listed).TotalSeconds,
+                results.Count(r => r.Decision is EnqueueDecision.Created or EnqueueDecision.Requeued),
+                (timer.Elapsed - enqueued).TotalSeconds);
+
+            ShowEnqueueSummary(results, removedCount);
 
             // After the summary: the prompt is modal and per file, so the user should already know
             // how many files the scan produced before being asked about them one at a time.
@@ -524,6 +728,43 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsScanning = false;
             Interlocked.CompareExchange(ref _scanCts, null, cts);
             cts.Dispose();
+            finished.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> with the same busy state, cancellation and error reporting a
+    /// folder scan has, for scans that are not of one folder (a playlist refresh).
+    /// </summary>
+    private async Task RunBusyAsync(Func<CancellationToken, Task> work)
+    {
+        var cts = new CancellationTokenSource();
+        Interlocked.Exchange(ref _scanCts, cts)?.Dispose();
+        var finished = new TaskCompletionSource();
+        _scanFinished = finished.Task;
+        IsScanning = true;
+
+        try
+        {
+            await work(cts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Strings.ScanCancelledMessage;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "재생목록을 새로 고치는 중 오류가 발생했습니다.");
+            var message = string.Format(CultureInfo.CurrentCulture, Strings.ScanFailedFormat, ex.Message);
+            StatusMessage = message;
+            _dialogs.ShowError(message);
+        }
+        finally
+        {
+            IsScanning = false;
+            Interlocked.CompareExchange(ref _scanCts, null, cts);
+            cts.Dispose();
+            finished.TrySetResult();
         }
     }
 
@@ -539,13 +780,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (IsQueueRunning)
-        {
-            StatusMessage = Strings.QueueBusyCannotScan;
-            _dialogs.ShowWarning(Strings.QueueBusyCannotScan);
-            return;
-        }
-
         if (IsScanning || IsPreparingModels)
         {
             // A scan is already using the status bar and the CTS; a competing drop would race it.
@@ -555,6 +789,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var cts = new CancellationTokenSource();
         Interlocked.Exchange(ref _scanCts, cts)?.Dispose();
+        var finished = new TaskCompletionSource();
+        _scanFinished = finished.Task;
         IsScanning = true;
 
         try
@@ -588,6 +824,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             ShowEnqueueSummary(results);
 
+            if (_viewPlaylistId is not null)
+            {
+                await AddDroppedToPlaylistAsync(results).ConfigureAwait(true);
+            }
+            else
+            {
+                // Dropped files from another folder are queued but belong to that folder's view.
+                var hidden = results.Count(r => r.Job is { } job && !IsInView(job));
+                if (hidden > 0)
+                {
+                    StatusMessage += string.Format(CultureInfo.CurrentCulture, Strings.DropHiddenElsewhereFormat, hidden);
+                }
+            }
+
             await AskPerFileIfRequestedAsync(settings, cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
@@ -606,6 +856,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsScanning = false;
             Interlocked.CompareExchange(ref _scanCts, null, cts);
             cts.Dispose();
+            finished.TrySetResult();
         }
     }
 
@@ -708,7 +959,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }).ConfigureAwait(true);
     }
 
-    private void ShowEnqueueSummary(IReadOnlyList<EnqueueResult> results)
+    /// <summary>
+    /// 목록 새로고침's clean-up: drops the viewed folder's rows whose video is gone from disk (see
+    /// <see cref="QueueListReconciler"/>). Rows of other folders are not touched. Returns how many
+    /// were removed.
+    /// </summary>
+    private async Task<int> RemoveVanishedAsync(CancellationToken cancellationToken)
+    {
+        var drop = QueueListReconciler.DropOnRefresh(_queue.Jobs.Where(IsInView), File.Exists);
+        if (drop.Count == 0)
+        {
+            return 0;
+        }
+
+        var result = await _queue.RemoveAsync(drop.Select(j => j.Id), cancellationToken: cancellationToken)
+            .ConfigureAwait(true);
+
+        RemoveRows(result.Removed);
+        return result.Removed.Count;
+    }
+
+    private void ShowEnqueueSummary(IReadOnlyList<EnqueueResult> results, int removed = 0)
     {
         var created = 0;
         var requeued = 0;
@@ -733,8 +1004,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Strings.EnqueueSummaryFormat,
             created, requeued, alreadyDone, unchanged, skipped);
 
+        if (removed > 0)
+        {
+            summary += string.Format(CultureInfo.CurrentCulture, Strings.EnqueueSummaryRemovedFormat, removed);
+        }
+
+        // The status bar, not a dialog: a scan runs on every folder switch, and a box to click away
+        // each time was in the way.
         StatusMessage = summary;
-        _dialogs.ShowInformation(summary, Strings.EnqueueSummaryTitle);
     }
 
     private async Task<AppSettings> PersistScanOptionsAsync(string folder, CancellationToken cancellationToken)
@@ -835,6 +1112,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             restrict = anyChecked ? selection.Ids : null;
         }
 
+        // 전체 실행 means what is on screen — this folder, or this playlist — not every folder ever
+        // opened. A predicate, so a file a refresh (or the user) adds to it mid-run still gets its turn.
+        var folder = _listFolder;
+        var includeSubfolders = IncludeSubfolders;
+        var playlists = _playlists;
+        Func<Job, bool>? scope = _viewPlaylistId is { } playlistId
+            ? job => playlists.Contains(playlistId, job.Id)
+            : folder is null
+                ? null
+                : job => QueueListReconciler.IsInFolder(job.VideoPath, folder, includeSubfolders);
+
         _settings = _settingsService.Current;
 
         if (await EnsureModelsAsync().ConfigureAwait(true) is not { } runSettings)
@@ -848,7 +1136,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         runSettings = runSettings.Clone();
         runSettings.TestDurationSeconds = testDurationSeconds;
 
-        await _queue.StartAsync(runSettings, restrict).ConfigureAwait(true);
+        // Remembered for 작업 중인 폴더로: the view this run belongs to.
+        _runFolder = _viewPlaylistId is null ? folder : null;
+        _runPlaylistId = _viewPlaylistId;
+
+        await _queue.StartAsync(runSettings, restrict, scope).ConfigureAwait(true);
+        OnPropertyChanged(nameof(CanReturnToRunningView));
+        OnPropertyChanged(nameof(RunningViewTitle));
 
         StatusMessage = testDurationSeconds > 0
             ? string.Format(CultureInfo.CurrentCulture, "테스트 실행을 시작했습니다 (앞 {0}).", DescribeTestLength(testDurationSeconds))
@@ -1126,12 +1420,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.CancelDoneFormat, selection.Count);
     }
 
-    [RelayCommand(CanExecute = nameof(CanRemoveCompleted))]
+    /// <summary>
+    /// 완료 항목 비우기 for the rows on screen. Allowed while the queue runs: a completed job is
+    /// finished business for the pump and the prefetch lane alike, so taking it out changes nothing
+    /// they are doing.
+    /// </summary>
+    [RelayCommand]
     private async Task RemoveCompletedAsync()
     {
-        if (!Jobs.Any(j => j.Status == JobStatus.Completed))
+        // Hidden completed rows count too: they belong to this view, just not on screen.
+        var completed = _rowsById.Values
+            .Where(r => r.Status == JobStatus.Completed && IsInView(r.Id, r.FullPath))
+            .Select(r => r.Id)
+            .ToArray();
+        if (completed.Length == 0)
         {
             StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.RemoveCompletedDoneFormat, 0);
+            return;
+        }
+
+        if (await TryRemoveFromPlaylistAsync(completed, confirm: true).ConfigureAwait(true))
+        {
             return;
         }
 
@@ -1140,7 +1449,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var result = await _queue.RemoveCompletedAsync().ConfigureAwait(true);
+        var result = await _queue.RemoveAsync(completed).ConfigureAwait(true);
         RemoveRows(result.Removed);
 
         StatusMessage = string.Format(
@@ -1163,6 +1472,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         var selection = Resolve(JobAction.Remove);
         if (!Accept(selection, JobAction.Remove))
+        {
+            return;
+        }
+
+        if (await TryRemoveFromPlaylistAsync(selection.Ids, confirm: true).ConfigureAwait(true))
         {
             return;
         }
@@ -1459,11 +1773,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // Commands: selection helpers and shell integration
     // -----------------------------------------------------------------------
 
-    [RelayCommand]
-    private void SelectAll() => SetAllChecked(true);
+    /// <summary>
+    /// The 선택 column header's check box: checked when every row is, empty when none is, and the
+    /// in-between mark otherwise. Clicking it checks everything, or clears everything when all were
+    /// already checked — the header used to sort by the check mark instead, which nobody needs.
+    /// </summary>
+    public bool? AllChecked
+    {
+        get
+        {
+            var any = false;
+            var all = true;
 
-    [RelayCommand]
-    private void ClearSelection() => SetAllChecked(false);
+            foreach (var row in Jobs)
+            {
+                if (row.IsSelected)
+                {
+                    any = true;
+                }
+                else
+                {
+                    all = false;
+                }
+
+                if (any && !all)
+                {
+                    return null;
+                }
+            }
+
+            return any && all;
+        }
+        set => SetAllChecked(value == true);
+    }
 
     private void SetAllChecked(bool value) => BatchSelectionChange(() =>
     {
@@ -1547,6 +1889,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             StatusMessage = Strings.SourceNotFoundMessage;
         }
+    }
+
+    /// <summary>자막 보기: the subtitle a finished job wrote, in the app's own viewer.</summary>
+    [RelayCommand]
+    private void OpenSubtitleFile(JobRowViewModel? row)
+    {
+        row ??= PrimaryRow();
+        if (row is not { HasSubtitle: true })
+        {
+            StatusMessage = Strings.SubtitleNotReadyMessage;
+            return;
+        }
+
+        if (!File.Exists(row.OutputPath))
+        {
+            StatusMessage = Strings.SubtitleFileNotFoundMessage;
+            return;
+        }
+
+        _windows.ShowSubtitleEditor(row.OutputPath!);
     }
 
     /// <summary>Windows 속성 대화상자.</summary>
@@ -1854,6 +2216,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var previous = _settings;
             _settings = snapshot;
             ApplySettings(snapshot);
+            await RefreshModelChoicesAsync().ConfigureAwait(true);
             await OfferOutputRelocationAsync(previous, snapshot).ConfigureAwait(true);
         });
     }
@@ -1950,7 +2313,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        List<JobRowViewModel>? newRows = null;
+        List<(Job Job, JobRowViewModel Row)>? newRows = null;
+        var reappeared = false;
 
         // One drain can carry hundreds of status changes, so the command re-evaluation each of them
         // triggers is folded into the single pass at the end.
@@ -1966,22 +2330,62 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 if (_rowsById.TryGetValue(id, out var row))
                 {
                     row.Update(job);
+
+                    // With 완료 항목 숨기기 on, a job finishing leaves the screen; one retried comes back.
+                    if (HideCompleted && IsInView(job))
+                    {
+                        var onScreen = Jobs.Contains(row);
+                        if (onScreen && !IsVisible(job))
+                        {
+                            row.IsSelected = false;
+                            if (ReferenceEquals(SelectedJob, row))
+                            {
+                                SelectedJob = null;
+                            }
+
+                            Jobs.Remove(row);
+                        }
+                        else if (!onScreen && IsVisible(job))
+                        {
+                            reappeared = true;
+                        }
+                    }
+
                     continue;
                 }
 
                 var created = new JobRowViewModel(job);
                 AttachRow(created);
                 _rowsById[id] = created;
-                (newRows ??= []).Add(created);
+
+                // Every job gets a row, but only the viewed folder's rows go on screen.
+                if (IsVisible(job))
+                {
+                    (newRows ??= []).Add((job, created));
+                }
             }
 
             if (newRows is { Count: > 0 })
             {
-                Jobs.AddRange(newRows);
+                // In queue order, not in the buffer's order. The buffer is a hash map, so a scan's
+                // new rows used to land in hash order while the queue ran them by QueueOrder: the
+                // grid looked shuffled and its top row was not the one that started first. Only a
+                // restart (RebuildRows reads JobQueueService.Jobs, which is sorted) put it right.
+                Jobs.AddRange(newRows
+                    .OrderBy(n => n.Job.QueueOrder)
+                    .ThenBy(n => n.Job.CreatedAtUtc)
+                    .Select(n => n.Row)
+                    .ToList());
             }
 
             RecalculateCounters();
         });
+
+        // Rare (a hidden job retried from elsewhere), so the whole view is rebuilt to keep queue order.
+        if (reappeared)
+        {
+            ApplyView();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -2007,10 +2411,62 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 var row = new JobRowViewModel(job);
                 AttachRow(row);
                 _rowsById[job.Id] = row;
-                rows.Add(row);
+
+                if (IsVisible(job))
+                {
+                    rows.Add(row);
+                }
             }
 
             Jobs.Reset(rows);
+            RecalculateCounters();
+        });
+    }
+
+    /// <summary>Whether <paramref name="job"/> belongs on screen in the current view.</summary>
+    private bool IsVisible(Job job) =>
+        IsInView(job) && !(HideCompleted && job.Status == JobStatus.Completed);
+
+    /// <summary>Whether <paramref name="job"/> belongs to the viewed folder or playlist, shown or hidden.</summary>
+    private bool IsInView(Job job) => IsInView(job.Id, job.VideoPath);
+
+    private bool IsInView(string jobId, string videoPath) =>
+        _viewPlaylistId is { } playlistId
+            ? _playlists.Contains(playlistId, jobId)
+            : _listFolder is null || QueueListReconciler.IsInFolder(videoPath, _listFolder, IncludeSubfolders);
+
+    /// <summary>
+    /// Puts the current view's rows on screen, in queue order. Rows leaving the screen are unchecked:
+    /// a checkbox the user cannot see must not steer 시작 or 제거.
+    /// </summary>
+    private void ApplyView()
+    {
+        BatchSelectionChange(() =>
+        {
+            var visible = new List<JobRowViewModel>();
+            foreach (var job in _queue.Jobs)
+            {
+                if (!_rowsById.TryGetValue(job.Id, out var row))
+                {
+                    continue;
+                }
+
+                if (IsVisible(job))
+                {
+                    visible.Add(row);
+                }
+                else
+                {
+                    row.IsSelected = false;
+                }
+            }
+
+            if (SelectedJob is { } selected && !visible.Contains(selected))
+            {
+                SelectedJob = null;
+            }
+
+            Jobs.Reset(visible);
             RecalculateCounters();
         });
     }
@@ -2045,10 +2501,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        TotalCount = Jobs.Count;
+        // Hidden completed rows are still this view's jobs, so the counts keep them.
+        var hidden = HideCompleted
+            ? _rowsById.Values.Count(r => r.Status == JobStatus.Completed && IsInView(r.Id, r.FullPath))
+            : 0;
+        HiddenCompletedCount = hidden;
+
+        TotalCount = Jobs.Count + hidden;
         PendingCount = pending;
         RunningCount = running;
-        CompletedCount = completed;
+        CompletedCount = completed + hidden;
         FailedCount = failed;
     }
 
@@ -2057,10 +2519,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(TargetFolder) && !string.IsNullOrWhiteSpace(settings.LastFolder))
         {
             TargetFolder = settings.LastFolder;
+
+            // The folder viewed last time is the one shown at startup.
+            _listFolder ??= settings.LastFolder;
         }
 
         IncludeSubfolders = settings.IncludeSubfolders;
         IncludeHiddenFolders = settings.IncludeHiddenFolders;
+        HideCompleted = settings.HideCompletedJobs;
         SelectedPostQueueAction = settings.PostQueueAction;
 
         // A value the user set before this ran under the old "테스트 모드" setting carries over as the
@@ -2241,6 +2707,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OpenOutputFolderCommand.NotifyCanExecuteChanged();
         OpenSourceFolderCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(StartButtonCaption));
+        OnPropertyChanged(nameof(AllChecked));
     }
 
     /// <summary>
@@ -2294,6 +2761,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         var removed = new HashSet<string>(ids, StringComparer.Ordinal);
+
+        // The database has dropped their playlist entries by cascade; memory follows.
+        _playlists.ForgetJobs(removed);
 
         BatchSelectionChange(() =>
         {

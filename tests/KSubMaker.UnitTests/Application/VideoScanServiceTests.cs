@@ -52,6 +52,28 @@ public sealed class VideoScanServiceTests
         report.DirectoriesVisited.Should().Be(1);
     }
 
+    /// <summary>
+    /// Each folder is listed once, not once per video. Re-reading the folder for every video's
+    /// sidecar lookup made a 467-video folder on a network drive take about 50 s (2026-11-02).
+    /// </summary>
+    [Fact]
+    public void A_folder_is_listed_once_however_many_videos_it_holds()
+    {
+        var fileSystem = new InMemoryFileSystem().AddDirectory("/videos");
+        for (var i = 0; i < 40; i++)
+        {
+            fileSystem.AddFile($"/videos/{i:00}.mp4");
+        }
+
+        fileSystem.AddFile("/videos/07.ko.srt");
+
+        var report = NewService(fileSystem).Scan(Request());
+
+        report.Files.Should().HaveCount(40);
+        report.Files.Single(f => f.FileName == "07.mp4").HasKoreanExternalSubtitle.Should().BeTrue();
+        fileSystem.FileListings.Values.Sum().Should().Be(1, "one folder, one listing");
+    }
+
     [Fact]
     public void A_deeply_nested_tree_is_walked_completely()
     {

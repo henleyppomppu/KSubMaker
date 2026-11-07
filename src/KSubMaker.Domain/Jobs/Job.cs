@@ -184,12 +184,81 @@ public sealed class Job
         ProcessingSpeed = 0d;
     }
 
+    /// <summary>
+    /// The run finished without anything to write — a silent audio track — and that is not a failure.
+    /// Parked as <see cref="JobStatus.Skipped"/> with <paramref name="reasonCode"/> kept in
+    /// <see cref="ErrorCode"/> so the grid can say why (음성 없음) instead of a red 실패. Forced like
+    /// <see cref="MarkFailed"/>: the state machine only admits Skipped from Pending, and this arrives
+    /// from an active stage.
+    /// </summary>
+    public void MarkNothingToDo(string reasonCode, string message, TimeProvider? timeProvider = null)
+    {
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+
+        Status = JobStatus.Skipped;
+        CurrentStage = JobStage.Done;
+        OverallProgress = 100d;
+        StageProgress = 100d;
+        ErrorCode = reasonCode;
+        ErrorMessage = message;
+        CompletedAtUtc = now;
+        UpdatedAtUtc = now;
+        EstimatedTimeRemaining = null;
+        ProcessingSpeed = 0d;
+    }
+
     public void EnterStage(JobStage stage, TimeProvider? timeProvider = null)
     {
         TransitionTo(JobStateMachine.StatusForStage(stage), timeProvider);
+        NoteSkippedStages(stage);
         CurrentStage = stage;
         StageProgress = 0d;
-        OverallProgress = ProgressCalculator.Overall(stage, 0d);
+        OverallProgress = ProgressCalculator.Overall(stage, 0d, _skippedStages);
+    }
+
+    /// <summary>
+    /// Stages this run will not do (see <see cref="ProgressCalculator"/>). Transient: rebuilt on
+    /// every run, never stored.
+    /// </summary>
+    private readonly HashSet<JobStage> _skippedStages = [];
+
+    public IReadOnlySet<JobStage> SkippedStages => _skippedStages;
+
+    /// <summary>Starts a fresh stage plan for a new run: every stage counts until shown otherwise.</summary>
+    public void ResetStagePlan() => _skippedStages.Clear();
+
+    /// <summary>
+    /// Takes a stage that has not been reached out of the plan — 번역 once the audio turns out to be
+    /// Korean — and rescales the bar to match. Moves it forward, never back.
+    /// </summary>
+    public void SkipStage(JobStage stage)
+    {
+        if (stage == CurrentStage || !_skippedStages.Add(stage))
+        {
+            return;
+        }
+
+        if (CurrentStage is not (JobStage.None or JobStage.Done))
+        {
+            OverallProgress = ProgressCalculator.Overall(CurrentStage, StageProgress, _skippedStages);
+        }
+    }
+
+    /// <summary>A report that jumps ahead passed the stages in between without doing them.</summary>
+    private void NoteSkippedStages(JobStage next)
+    {
+        var order = ProgressCalculator.StageOrder;
+        var from = ProgressCalculator.IndexOf(CurrentStage);
+        var to = ProgressCalculator.IndexOf(next);
+        if (from < 0 || to < 0)
+        {
+            return;
+        }
+
+        for (var i = from + 1; i < to; i++)
+        {
+            _skippedStages.Add(order[i]);
+        }
     }
 
     /// <summary>
@@ -215,9 +284,10 @@ public sealed class Job
     /// </summary>
     public void ReportProgress(JobStage stage, double stageProgress, TimeProvider? timeProvider = null)
     {
+        NoteSkippedStages(stage);
         CurrentStage = stage;
         StageProgress = Math.Clamp(stageProgress, 0d, 100d);
-        OverallProgress = ProgressCalculator.Overall(stage, StageProgress);
+        OverallProgress = ProgressCalculator.Overall(stage, StageProgress, _skippedStages);
         UpdatedAtUtc = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
         var reported = JobStateMachine.StatusForStage(stage);

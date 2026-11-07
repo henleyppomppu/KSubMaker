@@ -95,6 +95,13 @@ public sealed class JobQueueService : IAsyncDisposable
     private HashSet<string> _restrictTo = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The run's scope beyond an explicit selection — the folder or playlist on screen when 시작 was
+    /// pressed. A predicate rather than a list of ids so a file a refresh adds to that folder while
+    /// the run is going still gets its turn. Null means every job.
+    /// </summary>
+    private Func<Job, bool>? _scope;
+
+    /// <summary>
     /// Terminal outcomes tallied within the current run, so <see cref="QueueDrained"/> can report
     /// what the run actually did. Reset by <see cref="StartAsync"/>; each is bumped once per job from
     /// the single choke point in <see cref="RunJobAsync"/>'s finally.
@@ -229,7 +236,11 @@ public sealed class JobQueueService : IAsyncDisposable
         var results = new List<EnqueueResult>(files.Count);
         var toAdd = new List<Job>();
         var toUpdate = new List<Job>();
-        var order = _jobs.Count;
+        // After the max, not the count: once rows have been removed (완료 항목 비우기, 목록에서 빼기)
+        // the count is below the highest number in use, and new jobs took numbers that existing rows
+        // already had — five new rows shared 181..185 with five old ones (2026-11-02). The grid put
+        // them at the bottom while the queue interleaved them, and a restart reordered both.
+        var order = _jobs.IsEmpty ? 0 : _jobs.Values.Max(j => j.QueueOrder) + 1;
 
         await _mutationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -246,13 +257,16 @@ public sealed class JobQueueService : IAsyncDisposable
 
                 switch (result.Decision)
                 {
-                    case EnqueueDecision.Created or EnqueueDecision.AlreadyDone when result.Job is not null:
+                    // AlreadyDone covers both a brand-new file and a queued job that a rescan has just
+                    // flipped to 완료; the latter is already a row and must be updated, not inserted.
+                    case EnqueueDecision.Created or EnqueueDecision.AlreadyDone
+                        when result.Job is not null && !_jobs.ContainsKey(result.Job.Id):
                         result.Job.QueueOrder = order++;
                         _jobs[result.Job.Id] = result.Job;
                         toAdd.Add(result.Job);
                         break;
 
-                    case EnqueueDecision.Requeued when result.Job is not null:
+                    case EnqueueDecision.Requeued or EnqueueDecision.AlreadyDone when result.Job is not null:
                         toUpdate.Add(result.Job);
                         break;
                 }
@@ -437,9 +451,10 @@ public sealed class JobQueueService : IAsyncDisposable
 
     /// <summary>
     /// Starts (or resumes) processing. <paramref name="jobIds"/> restricts the run to a selection;
-    /// null runs everything that is pending, paused or failed-with-retry.
+    /// null runs everything that is pending, paused or failed-with-retry. <paramref name="scope"/>
+    /// narrows that further to the jobs it accepts (the folder or playlist being viewed).
     /// </summary>
-    public Task StartAsync(AppSettings settings, IEnumerable<string>? jobIds = null)
+    public Task StartAsync(AppSettings settings, IEnumerable<string>? jobIds = null, Func<Job, bool>? scope = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -449,6 +464,7 @@ public sealed class JobQueueService : IAsyncDisposable
         }
 
         _restrictTo = jobIds is null ? [] : new HashSet<string>(jobIds, StringComparer.Ordinal);
+        _scope = scope;
         _pauseRequested = false;
         _runCompleted = 0;
         _runFailed = 0;
@@ -991,6 +1007,7 @@ public sealed class JobQueueService : IAsyncDisposable
     private IReadOnlyList<Job> UnfinishedInQueueOrder() =>
         _jobs.Values
             .Where(j => _restrictTo.Count == 0 || _restrictTo.Contains(j.Id))
+            .Where(j => _scope is null || _scope(j))
             .Where(j => !JobStateMachine.IsTerminal(j.Status))
             .OrderBy(j => j.QueueOrder)
             .ThenBy(j => j.CreatedAtUtc)
@@ -1124,6 +1141,47 @@ public sealed class JobQueueService : IAsyncDisposable
             return;
         }
 
+        // Claimed under the same lock EnqueueAsync holds. A refresh may run while the queue does, and
+        // it marks a waiting job 완료 when it finds that job's subtitle; the pump picks its next job
+        // without the lock, so without this it could start a job the refresh had just finished. Once
+        // the job is in its first active status here, the refresh sees it as running and leaves it be.
+        var startStage = phase == JobPhase.TranslateAndWrite ? JobStage.Translating : JobStage.Probing;
+        var startStatus = JobStateMachine.StatusForStage(startStage);
+
+        await _mutationLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (!_jobs.ContainsKey(job.Id) || JobStateMachine.IsTerminal(job.Status))
+            {
+                return;
+            }
+
+            // Pass 2 of the two-pass strategies starts at 번역 중, everything else at 검사 중. Every
+            // status the pump can hand in here — Pending, Paused, or the stage pass 1 left behind —
+            // may legally enter either, so this is a real transition now. It used to be silently
+            // skipped whenever the start status was Translating, which left the row claiming to be
+            // in a stage it had already finished.
+            // Pass 2 continues the plan pass 1 started; everything else starts a new one.
+            if (phase != JobPhase.TranslateAndWrite)
+            {
+                job.ResetStagePlan();
+            }
+
+            if (JobStateMachine.CanTransition(job.Status, startStatus))
+            {
+                job.TransitionTo(startStatus, _timeProvider);
+                job.CurrentStage = startStage;
+            }
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+
+        // Where this run's progress starts, for 남은 시간: set by the first report.
+        double? runStartProgress = null;
+        var runStartElapsed = TimeSpan.Zero;
+
         var processor = _processorSelector.Select(settings);
         var stopwatch = Stopwatch.StartNew();
         var lastPersist = TimeSpan.Zero;
@@ -1159,9 +1217,26 @@ public sealed class JobQueueService : IAsyncDisposable
             {
                 job.DetectedLanguage = update.DetectedLanguage;
                 job.LanguageProbability = update.LanguageProbability;
+
+                // The worker does not translate Korean into Korean (skipTranslationForSameLanguage,
+                // on by default). Knowing it now lets the bar fill the rest of the way smoothly
+                // instead of sitting at the end of 음성 인식 and then jumping over 번역.
+                if (string.Equals(update.DetectedLanguage, "ko", StringComparison.OrdinalIgnoreCase))
+                {
+                    job.SkipStage(JobStage.Translating);
+                }
             }
 
-            job.EstimatedTimeRemaining = ProgressCalculator.EstimateRemaining(job.OverallProgress, stopwatch.Elapsed);
+            if (runStartProgress is null)
+            {
+                runStartProgress = job.OverallProgress;
+                runStartElapsed = stopwatch.Elapsed;
+            }
+
+            job.EstimatedTimeRemaining = ProgressCalculator.EstimateRemaining(
+                job.OverallProgress,
+                stopwatch.Elapsed - runStartElapsed,
+                runStartProgress.Value);
 
             // Progress arrives many times a second; the database only needs it every couple of
             // seconds so a crash resumes from roughly the right place.
@@ -1176,20 +1251,6 @@ public sealed class JobQueueService : IAsyncDisposable
 
         try
         {
-            // Pass 2 of the two-pass strategies starts at 번역 중, everything else at 검사 중. Every
-            // status the pump can hand in here — Pending, Paused, or the stage pass 1 left behind —
-            // may legally enter either, so this is a real transition now. It used to be silently
-            // skipped whenever the start status was Translating, which left the row claiming to be
-            // in a stage it had already finished.
-            var startStage = phase == JobPhase.TranslateAndWrite ? JobStage.Translating : JobStage.Probing;
-            var startStatus = JobStateMachine.StatusForStage(startStage);
-
-            if (JobStateMachine.CanTransition(job.Status, startStatus))
-            {
-                job.TransitionTo(startStatus, _timeProvider);
-                job.CurrentStage = startStage;
-            }
-
             await PersistQuietlyAsync(job).ConfigureAwait(false);
             RaiseJobChanged(job);
 
@@ -1292,6 +1353,17 @@ public sealed class JobQueueService : IAsyncDisposable
         {
             var code = result.ErrorCode ?? ErrorCodes.Unknown;
             var message = result.ErrorMessage ?? UserFacingErrors.Describe(code);
+
+            if (code == ErrorCodes.NoSpeech)
+            {
+                // A silent track: nothing went wrong, there is just no subtitle to make. Never
+                // retried (the same silence comes back), never counted as a failure.
+                _logger.LogInformation("음성이 없어 만들 자막이 없습니다: {JobId}", job.Id);
+                job.MarkNothingToDo(code, UserFacingErrors.Describe(code), _timeProvider);
+                await PersistQuietlyAsync(job).ConfigureAwait(false);
+                RaiseJobChanged(job);
+                return;
+            }
 
             var shouldAutoRetry = settings.AutoRetryOnRecoverableError
                                   && (result.Recoverable || ErrorCodes.IsAutoRetryable(code))
@@ -1438,6 +1510,11 @@ public sealed class JobQueueService : IAsyncDisposable
     private bool IsRunnable(Job job)
     {
         if (_restrictTo.Count > 0 && !_restrictTo.Contains(job.Id))
+        {
+            return false;
+        }
+
+        if (_scope is not null && !_scope(job))
         {
             return false;
         }

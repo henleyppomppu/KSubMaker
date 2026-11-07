@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.TryAddSingleton<SettingsService>();
         services.TryAddSingleton<VideoScanService>();
         services.TryAddSingleton<JobQueueService>();
+        services.TryAddSingleton<PlaylistService>();
 
         AddInProcessPipeline(services);
 
@@ -104,6 +105,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IJobRepository, JobRepository>();
         services.TryAddSingleton<ISettingsRepository, SettingsRepository>();
         services.TryAddSingleton<IModelRepository, ModelRepository>();
+        services.TryAddSingleton<IPlaylistRepository, PlaylistRepository>();
         services.TryAddSingleton<IDatabaseInitializer, DatabaseInitializer>();
     }
 

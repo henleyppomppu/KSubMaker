@@ -299,7 +299,41 @@ def test_a_job_runs_on_a_background_thread_and_is_acked(channel) -> None:
     assert channel.first("completed") is not None
 
 
-def test_a_second_job_is_refused_while_one_is_running(channel) -> None:
+def test_a_job_sent_while_the_previous_thread_is_still_unwinding_is_accepted(channel) -> None:
+    """The host sends the next ``process`` as soon as it reads ``completed``; the thread that sent
+    it may not have returned yet, and that window used to be refused with PROTOCOL_ERROR."""
+    started: list[str] = []
+
+    class SlowToReturn(FakeHandlers):
+        def process(self, command: dict[str, Any], token: CancellationToken) -> None:
+            started.append(str(command.get("jobId")))
+            protocol.emit_completed(
+                output_path="", cue_count=0, request_id=command.get("requestId"), job_id=command.get("jobId")
+            )
+            time.sleep(0.3)  # cleanup after the terminal event, still on the job thread
+
+    handlers = SlowToReturn()
+    worker = Worker(handlers)
+
+    worker._start_job(  # noqa: SLF001
+        {"command": "process", "requestId": "r1", "jobId": "j1"},
+        lambda token: handlers.process({"requestId": "r1", "jobId": "j1"}, token),
+        job_id="j1",
+    )
+    # Immediately, like the host does on reading `completed`.
+    worker._start_job(  # noqa: SLF001
+        {"command": "process", "requestId": "r2", "jobId": "j2"},
+        lambda token: handlers.process({"requestId": "r2", "jobId": "j2"}, token),
+        job_id="j2",
+    )
+    worker._join_job(5.0)  # noqa: SLF001
+
+    assert started == ["j1", "j2"]
+    assert not any(e["code"] == "PROTOCOL_ERROR" for e in channel.of_type("error"))
+
+
+def test_a_second_job_is_refused_while_one_is_running(channel, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Worker, "JOB_HANDOFF_GRACE_SECONDS", 0.2)
     handlers = FakeHandlers()
     worker = Worker(
         handlers,
@@ -481,6 +515,7 @@ def test_main_registers_the_cuda_dll_directories_before_the_first_command(
         return cuda_setup.CudaSetupReport(windows=False)
 
     monkeypatch.setattr(cuda_setup, "ensure_registered", fake_register)
+    monkeypatch.setattr(main_module, "preload_native_modules", lambda: events.append("preload"))
 
     class RecordingWorker:
         def __init__(self) -> None:
@@ -499,7 +534,35 @@ def test_main_registers_the_cuda_dll_directories_before_the_first_command(
     monkeypatch.setattr(main_module, "Worker", RecordingWorker)
 
     assert main_module.main([]) == 0
-    assert events == ["register", "worker-constructed", "run"]
+    # preload after register (the DLL search path must be extended first) and before the worker
+    # reads its first command (so no job thread ever maps a native DLL).
+    assert events == ["register", "preload", "worker-constructed", "run"]
+
+
+def test_preloading_imports_the_native_modules_and_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A job thread once hung inside LoadLibrary importing numpy (2026-11-02). Importing on the main
+    thread at startup removes the window; a missing package must still not stop the worker."""
+    import builtins
+
+    from ksubmaker_worker import main as main_module
+
+    real_import = builtins.__import__
+    seen: list[str] = []
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name in main_module.PRELOADED_MODULES:
+            seen.append(name)
+            if name == "faster_whisper":
+                raise ImportError("not installed")
+            return None
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    loaded = main_module.preload_native_modules()
+
+    assert seen == list(main_module.PRELOADED_MODULES)
+    assert loaded == ["numpy", "ctranslate2"]
 
 
 # ---------------------------------------------------------------------------

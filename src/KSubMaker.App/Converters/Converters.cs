@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using KSubMaker.App.Resources;
@@ -86,6 +87,62 @@ public sealed class JobStageToTextConverter : OneWayConverter
 /// The brushes are frozen: an unfrozen brush handed to thousands of virtualised rows keeps a
 /// per-element change-notification subscription alive and shows up as scroll stutter.
 /// </summary>
+/// <summary>
+/// Left indent of a tree row, by its depth. The row template draws its own highlight across the
+/// full width, so the indentation has to be inside the row rather than the stock nested margin.
+/// </summary>
+public sealed class TreeIndentConverter : OneWayConverter
+{
+    private const double Step = 14d;
+
+    public override object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var depth = 0;
+        var parent = value is DependencyObject item ? ItemsControl.ItemsControlFromItemContainer(item) : null;
+        while (parent is TreeViewItem treeItem)
+        {
+            depth++;
+            parent = ItemsControl.ItemsControlFromItemContainer(treeItem);
+        }
+
+        return new Thickness(depth * Step, 0, 0, 0);
+    }
+}
+
+/// <summary>
+/// Fill colour of the 진행 bar: blue while running, green when done, red on failure, amber when
+/// paused, grey for waiting (including audio prepared ahead), cancelled and skipped.
+///
+/// Light tints on purpose: the stage text sits on top of the bar and has to read in dark type over
+/// both the filled and the empty part. Saturated fills made it unreadable.
+/// </summary>
+public sealed class JobStatusToProgressBrushConverter : OneWayConverter
+{
+    private static readonly SolidColorBrush Running = Freeze(Color.FromRgb(0x9F, 0xC5, 0xF8));
+    private static readonly SolidColorBrush Done = Freeze(Color.FromRgb(0xA6, 0xDC, 0xB2));
+    private static readonly SolidColorBrush Failed = Freeze(Color.FromRgb(0xF3, 0xB0, 0xB0));
+    private static readonly SolidColorBrush Paused = Freeze(Color.FromRgb(0xF6, 0xD3, 0x92));
+    private static readonly SolidColorBrush Idle = Freeze(Color.FromRgb(0xD4, 0xD4, 0xD4));
+
+    public override object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value switch
+        {
+            JobStatus.Completed => Done,
+            JobStatus.Failed => Failed,
+            JobStatus.Paused => Paused,
+            JobStatus.Pending or JobStatus.Cancelled or JobStatus.Skipped => Idle,
+            JobStatus => Running,
+            _ => Idle
+        };
+
+    private static SolidColorBrush Freeze(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+}
+
 public sealed class JobStatusToBrushConverter : OneWayConverter
 {
     private static readonly SolidColorBrush Neutral = Freeze(Color.FromRgb(0x40, 0x40, 0x40));

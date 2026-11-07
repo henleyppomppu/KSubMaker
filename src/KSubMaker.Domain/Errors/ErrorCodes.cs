@@ -39,6 +39,13 @@ public static class ErrorCodes
     public const string WhisperModelNotFound = "WHISPER_MODEL_NOT_FOUND";
     public const string WhisperModelLoadFailed = "WHISPER_MODEL_LOAD_FAILED";
     public const string TranscriptionFailed = "TRANSCRIPTION_FAILED";
+
+    /// <summary>
+    /// The audio track is silent: Whisper ran and found nothing to say. Not a failure — there is
+    /// no subtitle to make — so the queue parks the job as <c>Skipped</c> and the grid reads 음성 없음.
+    /// </summary>
+    public const string NoSpeech = "NO_SPEECH";
+
     public const string TranslationModelNotFound = "TRANSLATION_MODEL_NOT_FOUND";
     public const string TranslationFailed = "TRANSLATION_FAILED";
     public const string InvalidTranslationResponse = "INVALID_TRANSLATION_RESPONSE";
@@ -56,7 +63,7 @@ public static class ErrorCodes
         VideoNotFound, VideoUnreadable, AudioTrackNotFound,
         SubtitleSourceNotFound, SubtitleSourceUnreadable, FfmpegNotFound, FfmpegFailed,
         CudaNotAvailable, CudaLibraryMissing, CudaOutOfMemory, WhisperModelNotFound, WhisperModelLoadFailed,
-        TranscriptionFailed, TranslationModelNotFound, TranslationFailed, InvalidTranslationResponse,
+        TranscriptionFailed, NoSpeech, TranslationModelNotFound, TranslationFailed, InvalidTranslationResponse,
         OutputWriteFailed, DiskSpaceLow, WorkerCrashed, OperationCancelled,
         ModelDownloadFailed, ModelVerificationFailed, ProtocolError, Unknown
     ];
