@@ -306,6 +306,12 @@
                             Visibility="{Binding CanReturnToRunningView, Converter={StaticResource BoolToVisibility}}"
                             ToolTip="{Binding RunningViewTitle}"
                             Style="{StaticResource ToolButton}" />
+                    <!-- Same option as 보기 → 하위 폴더 포함, kept beside the tree it changes -->
+                    <CheckBox DockPanel.Dock="Right"
+                              Content="{x:Static res:Strings.IncludeSubfoldersLabel}"
+                              IsChecked="{Binding IncludeSubfolders}"
+                              VerticalAlignment="Center"
+                              Margin="8,0,4,0" />
                     <TextBlock Text="{x:Static res:Strings.FolderTreeHeader}"
                                Style="{StaticResource GroupCaption}"
                                Margin="0"

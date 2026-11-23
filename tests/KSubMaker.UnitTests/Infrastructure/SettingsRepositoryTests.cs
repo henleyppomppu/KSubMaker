@@ -258,6 +258,21 @@ public sealed class SettingsRepositoryTests : IDisposable
         _factory.ReadAllSettings().Should().NotContainKey("SomeSettingFromAnOlderVersion");
     }
 
+    [Fact]
+    public async Task The_old_include_subfolders_row_is_ignored_so_the_new_default_reaches_existing_installs()
+    {
+        // Every install before the default changed had "true" here — written back on each scan.
+        _factory.WriteRawSetting("IncludeSubfolders", "true");
+
+        var loaded = await _repository.LoadAsync();
+        loaded.IncludeSubfolders.Should().BeFalse();
+
+        loaded.IncludeSubfolders = true;
+        await _repository.SaveAsync(loaded);
+        (await _repository.LoadAsync()).IncludeSubfolders.Should().BeTrue();
+        _factory.ReadAllSettings().Should().NotContainKey("IncludeSubfolders");
+    }
+
     // -----------------------------------------------------------------------
     // defaults
     // -----------------------------------------------------------------------

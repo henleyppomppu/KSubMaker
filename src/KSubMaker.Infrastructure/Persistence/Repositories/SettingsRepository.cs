@@ -23,6 +23,11 @@ public sealed class SettingsRepository(
     IDbContextFactory<KSubMakerDbContext> contextFactory,
     ILogger<SettingsRepository> logger) : ISettingsRepository
 {
+    // Stored under its own key, not nameof(IncludeSubfolders). The old row held true for everyone —
+    // it was the default and every scan wrote it back — so it never recorded a choice. Reading a new
+    // key lets the new default (off) reach existing installs once; the old row is dropped on save.
+    internal const string IncludeSubfoldersKey = "IncludeSubfoldersV2";
+
     private static readonly JsonSerializerOptions GlossaryJson = new()
     {
         WriteIndented = false
@@ -58,7 +63,7 @@ public sealed class SettingsRepository(
 
         // ---- scanning --------------------------------------------------------
         settings.LastFolder = GetString(rows, nameof(settings.LastFolder), settings.LastFolder);
-        settings.IncludeSubfolders = GetBool(rows, nameof(settings.IncludeSubfolders), settings.IncludeSubfolders);
+        settings.IncludeSubfolders = GetBool(rows, IncludeSubfoldersKey, settings.IncludeSubfolders);
         settings.IncludeHiddenFolders = GetBool(rows, nameof(settings.IncludeHiddenFolders), settings.IncludeHiddenFolders);
         settings.HideCompletedJobs = GetBool(rows, nameof(settings.HideCompletedJobs), settings.HideCompletedJobs);
         settings.ReprocessCompleted = GetBool(rows, nameof(settings.ReprocessCompleted), settings.ReprocessCompleted);
@@ -186,7 +191,7 @@ public sealed class SettingsRepository(
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(s.LastFolder)] = s.LastFolder,
-            [nameof(s.IncludeSubfolders)] = Write(s.IncludeSubfolders),
+            [IncludeSubfoldersKey] = Write(s.IncludeSubfolders),
             [nameof(s.IncludeHiddenFolders)] = Write(s.IncludeHiddenFolders),
             [nameof(s.HideCompletedJobs)] = Write(s.HideCompletedJobs),
             [nameof(s.ReprocessCompleted)] = Write(s.ReprocessCompleted),
