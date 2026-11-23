@@ -180,10 +180,49 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _targetFolder = string.Empty;
 
     [ObservableProperty]
-    private bool _includeSubfolders = true;
+    private bool _includeSubfolders;
 
     // Which rows belong to the folder depends on it, so the view follows the checkbox at once.
-    partial void OnIncludeSubfoldersChanged(bool value) => ApplyView();
+    partial void OnIncludeSubfoldersChanged(bool value)
+    {
+        ApplyView();
+
+        if (_applyingSettings)
+        {
+            return;
+        }
+
+        _ = OnIncludeSubfoldersToggledAsync(value);
+    }
+
+    private bool _applyingSettings;
+
+    /// <summary>
+    /// Turned on, the subfolders' videos were never scanned (the default is off), so the folder on
+    /// screen is scanned again — a scan also saves the option. Turned off, there is nothing to find;
+    /// the option is only saved. A drive root is not scanned for the same reason as on navigation.
+    /// </summary>
+    private async Task OnIncludeSubfoldersToggledAsync(bool value)
+    {
+        var folder = TargetFolder.Trim();
+        if (value && _viewPlaylistId is null && !string.IsNullOrWhiteSpace(folder) && !IsDriveRoot(folder)
+            && ScanCommand.CanExecute(null))
+        {
+            await ScanFolderAsync().ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            var settings = _settingsService.Current;
+            settings.IncludeSubfolders = value;
+            await _settingsService.SaveAsync(settings, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "하위 폴더 포함 설정을 저장하지 못했습니다.");
+        }
+    }
 
     [ObservableProperty]
     private bool _includeHiddenFolders;
@@ -2524,7 +2563,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _listFolder ??= settings.LastFolder;
         }
 
-        IncludeSubfolders = settings.IncludeSubfolders;
+        _applyingSettings = true;
+        try
+        {
+            IncludeSubfolders = settings.IncludeSubfolders;
+        }
+        finally
+        {
+            _applyingSettings = false;
+        }
+
         IncludeHiddenFolders = settings.IncludeHiddenFolders;
         HideCompleted = settings.HideCompletedJobs;
         SelectedPostQueueAction = settings.PostQueueAction;

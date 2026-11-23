@@ -8,7 +8,8 @@ public sealed class AppSettings
 {
     // ---- scanning --------------------------------------------------------
     public string LastFolder { get; set; } = string.Empty;
-    public bool IncludeSubfolders { get; set; } = true;
+    /// <summary>Off by default: a folder shows its own videos, not everything beneath it.</summary>
+    public bool IncludeSubfolders { get; set; }
     public bool IncludeHiddenFolders { get; set; }
 
     /// <summary>보기 → 완료 항목 숨기기: completed rows stay in the queue but off the list.</summary>
