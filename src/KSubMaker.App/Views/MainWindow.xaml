@@ -104,6 +104,7 @@
             </MenuItem>
             <MenuItem Header="{x:Static res:Strings.MenuJobs}">
                 <MenuItem Header="{x:Static res:Strings.RetryButton}" Command="{Binding RetryCommand}" />
+                <MenuItem Header="{x:Static res:Strings.RemakeMenuItem}" Command="{Binding RemakeCommand}" />
                 <MenuItem Header="{x:Static res:Strings.CancelJobButton}" Command="{Binding CancelJobsCommand}" />
                 <MenuItem Header="{Binding RemoveSelectedCaption}" Command="{Binding RemoveSelectedCommand}" />
                 <MenuItem Header="{x:Static res:Strings.RemoveCompletedButton}" Command="{Binding RemoveCompletedCommand}" />
@@ -629,6 +630,9 @@
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <MenuItem Header="{x:Static res:Strings.RetryButton}"
                               Command="{Binding PlacementTarget.DataContext.RetryCommand,
+                                                RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="{x:Static res:Strings.RemakeMenuItem}"
+                              Command="{Binding PlacementTarget.DataContext.RemakeCommand,
                                                 RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                     <MenuItem Header="{x:Static res:Strings.CancelJobButton}"
                               Command="{Binding PlacementTarget.DataContext.CancelJobsCommand,

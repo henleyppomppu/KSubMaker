@@ -92,6 +92,9 @@ namespace KSubMaker.Infrastructure.Persistence.Migrations
                     b.Property<int>("QueueOrder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("RemakeRequested")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("RetryCount")
                         .HasColumnType("INTEGER");
 

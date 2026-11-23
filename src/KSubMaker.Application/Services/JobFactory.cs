@@ -86,6 +86,13 @@ public static class JobFactory
                     return new EnqueueResult(EnqueueDecision.Unchanged, existing, "이미 한국어 자막이 있습니다.");
                 }
 
+                // 다시 만들기 queued it precisely because that subtitle is wrong; finding it again is
+                // not a reason to call the job done.
+                if (existing.RemakeRequested)
+                {
+                    return new EnqueueResult(EnqueueDecision.Unchanged, existing, null);
+                }
+
                 existing.HasExternalSubtitle = file.HasExternalSubtitle;
                 existing.HasKoreanSubtitle = true;
                 MarkAlreadyDone(existing, outputPath, now);
