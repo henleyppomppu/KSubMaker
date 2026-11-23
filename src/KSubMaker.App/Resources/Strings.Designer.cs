@@ -436,6 +436,24 @@ public static partial class Strings
     /// <summary>{0}건을 다시 대기열에 넣었습니다.</summary>
     public static string RetryDoneFormat => Get(nameof(RetryDoneFormat));
 
+    /// <summary>다시 만들기</summary>
+    public static string RemakeMenuItem => Get(nameof(RemakeMenuItem));
+
+    /// <summary>{0}건은 음성 인식·번역 모델이 지난번과 같습니다. …</summary>
+    public static string RemakeSameModelsQuestionFormat => Get(nameof(RemakeSameModelsQuestionFormat));
+
+    /// <summary>다시 만들지 않았습니다. …</summary>
+    public static string RemakeDeclinedMessage => Get(nameof(RemakeDeclinedMessage));
+
+    /// <summary>{0}건을 다시 만들기 대기열에 넣었습니다. …</summary>
+    public static string RemakeQueuedFormat => Get(nameof(RemakeQueuedFormat));
+
+    /// <summary>{0}건을 다시 만들기 시작했습니다. …</summary>
+    public static string RemakeStartedFormat => Get(nameof(RemakeStartedFormat));
+
+    /// <summary>다시 만들기는 완료된 항목에만 할 수 있습니다.</summary>
+    public static string SelectionNotRemakeableMessage => Get(nameof(SelectionNotRemakeableMessage));
+
     /// <summary>{0}건을 건너뜁니다.</summary>
     public static string CancelDoneFormat => Get(nameof(CancelDoneFormat));
 

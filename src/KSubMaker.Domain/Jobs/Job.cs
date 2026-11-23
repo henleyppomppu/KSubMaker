@@ -107,6 +107,13 @@ public sealed class Job
     /// <summary>Free-text note the user attached from the grid. Never touched by the pipeline.</summary>
     public string? Note { get; set; }
 
+    /// <summary>
+    /// Set by 다시 만들기: this job's next run overwrites the subtitle it finds at its output path,
+    /// whatever the global 결과 파일 충돌 처리 says, and a rescan must not mark it 완료 just because
+    /// that subtitle exists. Cleared when the run completes. Persisted so a restart in between keeps it.
+    /// </summary>
+    public bool RemakeRequested { get; set; }
+
     // ---- bookkeeping -----------------------------------------------------
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;

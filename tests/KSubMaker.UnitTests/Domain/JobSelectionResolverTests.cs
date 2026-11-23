@@ -42,15 +42,15 @@ public sealed class JobSelectionResolverTests
     [InlineData(JobStatus.Failed, true)]
     [InlineData(JobStatus.Cancelled, true)]
     [InlineData(JobStatus.Skipped, true)]
-    [InlineData(JobStatus.Completed, true)]
+    [InlineData(JobStatus.Completed, false)]
     [InlineData(JobStatus.Paused, true)]
     [InlineData(JobStatus.Pending, false)]
     [InlineData(JobStatus.Transcribing, false)]
     [InlineData(JobStatus.Translating, false)]
     public void Retry_accepts_only_what_the_queue_will_requeue(JobStatus status, bool expected)
     {
-        // Mirrors JobQueueService.RetryAsync; the two drifting apart is how a button ends up doing
-        // nothing at all.
+        // JobQueueService.RetryAsync minus Completed: on a finished job 다시 넣기 did nothing at all
+        // (it found its own subtitle and skipped), so the button is grey there and 다시 만들기 takes over.
         JobSelectionResolver.IsEligible(JobAction.Retry, status).Should().Be(expected);
     }
 

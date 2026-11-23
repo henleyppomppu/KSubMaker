@@ -196,6 +196,9 @@ public sealed class ScriptedJobProcessor(params JobExecutionResult[] outcomes) :
     /// <summary>Job status observed on entry to each call, in call order.</summary>
     public List<JobStatus> StatusOnEntry { get; } = [];
 
+    /// <summary>The 결과 파일 충돌 처리 each call was handed, in call order.</summary>
+    public List<OutputConflictPolicy> ConflictPolicyOnEntry { get; } = [];
+
     /// <summary>Ids the prefetch lane asked to extract, in the order it asked.</summary>
     public List<string> Prefetched { get; } = [];
 
@@ -229,6 +232,7 @@ public sealed class ScriptedJobProcessor(params JobExecutionResult[] outcomes) :
 
         var index = Interlocked.Increment(ref _calls) - 1;
         StatusOnEntry.Add(job.Status);
+        ConflictPolicyOnEntry.Add(settings.OutputConflictPolicy);
 
         foreach (var stage in StagesToReport)
         {

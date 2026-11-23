@@ -20,7 +20,10 @@ public enum JobAction
     Remove,
 
     /// <summary>자막 원본 선택 — re-point one job at another audio or subtitle track.</summary>
-    ChooseSubtitleSource
+    ChooseSubtitleSource,
+
+    /// <summary>다시 만들기 — make a finished job's subtitle again, overwriting the one it wrote.</summary>
+    Remake
 }
 
 /// <summary>
@@ -91,9 +94,11 @@ public static class JobSelectionResolver
         // nothing left to stop.
         JobAction.Cancel => !JobStateMachine.IsTerminal(status),
 
-        // Mirrors JobQueueService.RetryAsync.
+        // JobQueueService.RetryAsync minus Completed. Re-queuing a finished job resumed from its cache
+        // and, under the default 건너뛰기, found its own subtitle and "succeeded" in 0.1 seconds without
+        // changing anything. A finished job is 다시 만들기's business, so 다시 넣기 is grey there.
         JobAction.Retry => status is JobStatus.Failed or JobStatus.Cancelled or JobStatus.Skipped
-            or JobStatus.Completed or JobStatus.Paused,
+            or JobStatus.Paused,
 
         // Anything can be removed: JobQueueService.RemoveAsync cancels a running job and waits for
         // the pump to let go of it before the row disappears.
@@ -102,6 +107,9 @@ public static class JobSelectionResolver
         // Mirrors JobQueueService.SetSourceOverrideAsync: the worker already holds a process command
         // built from the old value, so changing it mid-run would make the grid lie.
         JobAction.ChooseSubtitleSource => !JobStateMachine.IsActive(status),
+
+        // Mirrors JobQueueService.RemakeAsync: only a job that produced a subtitle has one to redo.
+        JobAction.Remake => status is JobStatus.Completed,
 
         _ => false
     };

@@ -407,6 +407,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private bool CanRetry => Resolve(JobAction.Retry).IsOk;
 
+    private bool CanRemake => Resolve(JobAction.Remake).IsOk;
+
     private bool CanCancelJobs => Resolve(JobAction.Cancel).IsOk;
 
     private bool CanRemoveSelected => Resolve(JobAction.Remove).IsOk;
@@ -1405,6 +1407,71 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         await _queue.RetryAsync(selection.Ids).ConfigureAwait(true);
         StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.RetryDoneFormat, selection.Count);
+    }
+
+    /// <summary>
+    /// 다시 만들기: queues finished jobs again so their subtitle is replaced. Jobs whose models are
+    /// unchanged would come out (nearly) the same, so for those the user is asked first — 예 clears
+    /// their cache and recomputes everything (for a fix in the app itself), 아니요 leaves them alone
+    /// so a different model can be picked. Jobs whose models did change go ahead without a question.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemake))]
+    private async Task RemakeAsync()
+    {
+        var selection = Resolve(JobAction.Remake);
+        if (!Accept(selection, JobAction.Remake))
+        {
+            return;
+        }
+
+        var settings = _settingsService.Current;
+        var jobs = _queue.Jobs.Where(j => selection.Ids.Contains(j.Id)).ToList();
+        var unchanged = jobs.Where(j => RemakeAdvisor.ModelsUnchanged(j, settings)).Select(j => j.Id).ToList();
+        var changed = jobs.Select(j => j.Id).Except(unchanged).ToList();
+
+        // Asked before anything is queued, so 아니요 leaves those rows exactly as they were.
+        var remakeUnchanged = unchanged.Count > 0
+            && _dialogs.Confirm(
+                string.Format(CultureInfo.CurrentCulture, Strings.RemakeSameModelsQuestionFormat, unchanged.Count),
+                Strings.RemakeMenuItem);
+
+        if (changed.Count == 0 && !remakeUnchanged)
+        {
+            StatusMessage = Strings.RemakeDeclinedMessage;
+            return;
+        }
+
+        var queued = new List<string>();
+        if (changed.Count > 0)
+        {
+            queued.AddRange(await _queue.RemakeAsync(changed, clearCache: false).ConfigureAwait(true));
+        }
+
+        if (remakeUnchanged)
+        {
+            queued.AddRange(await _queue.RemakeAsync(unchanged, clearCache: true).ConfigureAwait(true));
+        }
+
+        if (queued.Count == 0)
+        {
+            return;
+        }
+
+        // 다시 만들기 means "this file, now". An idle queue runs exactly these; a running one takes
+        // them next on its own (JobQueueService.InRun), so there is nothing to press either way.
+        if (CanStart)
+        {
+            await LaunchQueueAsync(testDurationSeconds: 0, explicitIds: queued).ConfigureAwait(true);
+
+            // The queue's own flag: the view model's mirror of it follows an event and may lag.
+            if (_queue.IsRunning)
+            {
+                StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.RemakeStartedFormat, queued.Count);
+                return;
+            }
+        }
+
+        StatusMessage = string.Format(CultureInfo.CurrentCulture, Strings.RemakeQueuedFormat, queued.Count);
     }
 
     [RelayCommand(CanExecute = nameof(CanCancelJobs))]
@@ -2676,6 +2743,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         JobAction.Start => Strings.SelectionNotStartableMessage,
         JobAction.Cancel => Strings.SelectionNotCancellableMessage,
         JobAction.Retry => Strings.SelectionNotRetryableMessage,
+        JobAction.Remake => Strings.SelectionNotRemakeableMessage,
         JobAction.ChooseSubtitleSource => Strings.SubtitleSourceJobRunning,
 
         // JobAction.Remove accepts every status, so it never lands here; the generic sentence keeps
@@ -2697,6 +2765,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         RetryCommand.NotifyCanExecuteChanged();
+        RemakeCommand.NotifyCanExecuteChanged();
         CancelJobsCommand.NotifyCanExecuteChanged();
         RemoveSelectedCommand.NotifyCanExecuteChanged();
         ChooseSubtitleSourceCommand.NotifyCanExecuteChanged();

@@ -545,6 +545,85 @@ public sealed class JobQueueService : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 다시 만들기: puts finished jobs back in the queue so their next run overwrites the subtitle they
+    /// wrote (<see cref="Job.RemakeRequested"/>).
+    ///
+    /// <para>Without <paramref name="clearCache"/> the run reuses whatever the current settings did not
+    /// invalidate — change only the translation model and only the translation runs again. With it the
+    /// job's cache goes too and everything is recomputed, which is what a fix in the app itself needs:
+    /// a code change does not alter the settings fingerprint, so the old result would be reused.</para>
+    /// </summary>
+    /// <returns>The ids queued again, in the order given.</returns>
+    public async Task<IReadOnlyList<string>> RemakeAsync(
+        IEnumerable<string> jobIds,
+        bool clearCache,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(jobIds);
+
+        var changed = new List<Job>();
+
+        await _mutationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var id in jobIds.Distinct(StringComparer.Ordinal))
+            {
+                if (!_jobs.TryGetValue(id, out var job)
+                    || !JobSelectionResolver.IsEligible(JobAction.Remake, job.Status))
+                {
+                    continue;
+                }
+
+                job.RemakeRequested = true;
+                job.RetryCount++;
+                job.TransitionTo(JobStatus.Pending, _timeProvider);
+                changed.Add(job);
+            }
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+
+        if (changed.Count == 0)
+        {
+            return [];
+        }
+
+        if (clearCache)
+        {
+            foreach (var job in changed)
+            {
+                try
+                {
+                    await _checkpointStore.ClearAsync(job.Id, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Not fatal: the run then resumes from what is left, as a plain retry would.
+                    _logger.LogWarning(ex, "다시 만들기 전에 캐시를 지우지 못했습니다: {JobId}", job.Id);
+                }
+            }
+        }
+
+        await _repository.UpdateRangeAsync(changed, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "다시 만들기 {Count}건을 대기열에 넣었습니다. (캐시 삭제: {ClearCache})", changed.Count, clearCache);
+
+        foreach (var job in changed)
+        {
+            RaiseJobChanged(job);
+        }
+
+        return changed.Select(j => j.Id).ToArray();
+    }
+
     public async Task CancelAsync(IEnumerable<string> jobIds, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(jobIds);
@@ -1006,8 +1085,7 @@ public sealed class JobQueueService : IAsyncDisposable
     /// </summary>
     private IReadOnlyList<Job> UnfinishedInQueueOrder() =>
         _jobs.Values
-            .Where(j => _restrictTo.Count == 0 || _restrictTo.Contains(j.Id))
-            .Where(j => _scope is null || _scope(j))
+            .Where(InRun)
             .Where(j => !JobStateMachine.IsTerminal(j.Status))
             .OrderBy(j => j.QueueOrder)
             .ThenBy(j => j.CreatedAtUtc)
@@ -1181,6 +1259,14 @@ public sealed class JobQueueService : IAsyncDisposable
         // Where this run's progress starts, for 남은 시간: set by the first report.
         double? runStartProgress = null;
         var runStartElapsed = TimeSpan.Zero;
+
+        // 다시 만들기 replaces the subtitle this job wrote last time. Only this job's copy of the
+        // settings changes: the global 결과 파일 충돌 처리 still protects every other file.
+        if (job.RemakeRequested && settings.OutputConflictPolicy != OutputConflictPolicy.Overwrite)
+        {
+            settings = settings.Clone();
+            settings.OutputConflictPolicy = OutputConflictPolicy.Overwrite;
+        }
 
         var processor = _processorSelector.Select(settings);
         var stopwatch = Stopwatch.StartNew();
@@ -1450,6 +1536,9 @@ public sealed class JobQueueService : IAsyncDisposable
         job.TransitionTo(JobStatus.WritingSubtitle, _timeProvider);
         job.TransitionTo(JobStatus.Completed, _timeProvider);
 
+        // The remade subtitle is on disk; from here a rescan may treat it like any other.
+        job.RemakeRequested = false;
+
         ReclaimAudio(job);
     }
 
@@ -1507,20 +1596,17 @@ public sealed class JobQueueService : IAsyncDisposable
             .ThenBy(j => j.CreatedAtUtc)
             .ToArray();
 
-    private bool IsRunnable(Job job)
-    {
-        if (_restrictTo.Count > 0 && !_restrictTo.Contains(job.Id))
-        {
-            return false;
-        }
+    private bool IsRunnable(Job job) => InRun(job) && job.Status is JobStatus.Pending or JobStatus.Paused;
 
-        if (_scope is not null && !_scope(job))
-        {
-            return false;
-        }
-
-        return job.Status is JobStatus.Pending or JobStatus.Paused;
-    }
+    /// <summary>
+    /// Whether this run covers <paramref name="job"/>: the selection and the folder or playlist it was
+    /// started with. A job queued by 다시 만들기 is always covered — the user asked for that file
+    /// explicitly, so a run already going (perhaps over another folder) picks it up next instead of
+    /// leaving it waiting for another 시작.
+    /// </summary>
+    private bool InRun(Job job) =>
+        job.RemakeRequested
+        || ((_restrictTo.Count == 0 || _restrictTo.Contains(job.Id)) && (_scope is null || _scope(job)));
 
     private async Task PersistQuietlyAsync(Job job)
     {
